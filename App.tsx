@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Settings, Wallet, TrendingUp, PiggyBank, Target, ArrowRight, LayoutDashboard, Calculator, CalendarClock, Coins } from 'lucide-react';
+import { Plus, Settings, Wallet, TrendingUp, PiggyBank, Target, ArrowRight, LayoutDashboard, Calculator, CalendarClock, Coins, Trash2 } from 'lucide-react';
 import { MonthlyRecord, FinancialConfig, DEFAULT_CONFIG } from './types';
 import AnalysisChart from './components/AnalysisChart';
 import MonthEditor from './components/MonthEditor';
 import Simulator from './components/Simulator';
 import { calculateSimulation } from './services/simulationService';
-import { loadRecords, insertRecord } from './services/dataService';
+import { loadRecords, insertRecord, deleteRecord } from './services/dataService';
 
 // Mock local storage keys
 const STORAGE_KEY_DATA = 'assetflow_data_v1';
@@ -142,6 +142,18 @@ function App() {
   const handleEdit = (record: MonthlyRecord) => {
     setEditingRecord(record);
     setIsEditorOpen(true);
+  };
+
+  const handleDelete = async (record: MonthlyRecord) => {
+    if (window.confirm(`「${record.id}」の記録を削除しますか？`)) {
+      const success = await deleteRecord(record.id);
+      if (success) {
+        // ローカルstateからも削除
+        setRecords(prev => prev.filter(r => r.id !== record.id));
+      } else {
+        alert('削除に失敗しました。');
+      }
+    }
   };
 
   const handleAddNew = () => {
@@ -406,7 +418,7 @@ function App() {
                                 <th className="px-6 py-3">現金増減</th>
                                 <th className="px-6 py-3 bg-slate-50 border-l border-slate-200 text-slate-700">現金残高</th>
                                 <th className="px-6 py-3 bg-slate-50 text-slate-700">投資残高</th>
-                                <th className="px-6 py-3 w-16"></th>
+                                <th className="px-6 py-3 w-32"></th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -433,12 +445,21 @@ function App() {
                                             ¥{record.calculatedTotalInvest.toLocaleString()}
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <button 
-                                                onClick={() => handleEdit(record)}
-                                                className="text-slate-400 hover:text-blue-600 p-1 opacity-0 group-hover:opacity-100 transition-all"
-                                            >
-                                                編集
-                                            </button>
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button 
+                                                    onClick={() => handleEdit(record)}
+                                                    className="text-slate-400 hover:text-blue-600 p-1 opacity-0 group-hover:opacity-100 transition-all"
+                                                >
+                                                    編集
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleDelete(record)}
+                                                    className="text-slate-400 hover:text-red-600 p-1 opacity-0 group-hover:opacity-100 transition-all"
+                                                    title="削除"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 );

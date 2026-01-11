@@ -122,3 +122,25 @@ export async function insertRecord(record: MonthlyRecord): Promise<MonthlyRecord
     return null;
   }
 }
+
+/**
+ * 月次レコードを削除する
+ */
+export async function deleteRecord(recordId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('monthly_records')
+      .delete()
+      .eq('id', recordId);
+
+    if (error) {
+      console.error('Error deleting record:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error deleting record:', error);
+    return false;
+  }
+}
