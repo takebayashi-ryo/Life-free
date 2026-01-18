@@ -140,11 +140,11 @@ const MonthEditor: React.FC<MonthEditorProps> = ({ config, initialData, previous
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl overflow-hidden my-8">
+    <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-0 sm:p-4 overflow-y-auto">
+      <div className="bg-white rounded-none sm:rounded-2xl shadow-xl w-full h-full sm:h-auto sm:max-w-4xl sm:my-8 overflow-y-auto max-h-screen">
         {/* Header - Changed from black to white */}
-        <div className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center text-slate-800">
-          <h2 className="text-xl font-bold flex items-center gap-2">
+        <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-4 flex justify-between items-center text-slate-800 sticky top-0 z-10">
+          <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2">
             <Calculator size={20} className="text-blue-600" />
             {initialData ? '実績を編集' : '新しい月を記録'}
           </h2>
@@ -153,9 +153,9 @@ const MonthEditor: React.FC<MonthEditorProps> = ({ config, initialData, previous
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-8">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6 sm:space-y-8">
           {/* Top Section: Date & Income/Expense inputs */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 border-b border-slate-100 pb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 border-b border-slate-100 pb-6 sm:pb-8">
             {/* Left: Metadata & Income/Expense (Width 5/12) */}
             <div className="lg:col-span-5 space-y-6">
                 <div>
@@ -205,7 +205,7 @@ const MonthEditor: React.FC<MonthEditorProps> = ({ config, initialData, previous
             </div>
 
             {/* Right: Assets Management (Width 7/12) */}
-            <div className="lg:col-span-7 bg-gray-50 rounded-xl p-5 border border-slate-200">
+            <div className="lg:col-span-7 bg-gray-50 rounded-xl p-4 sm:p-5 border border-slate-200">
                  <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
                     <Wallet size={18} />
                     資産残高の確定 (Assets Confirmation)
@@ -331,11 +331,11 @@ const MonthEditor: React.FC<MonthEditorProps> = ({ config, initialData, previous
              )}
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onCancel} className="px-6 py-2.5 rounded-lg text-slate-600 hover:bg-slate-100 font-medium transition-colors">
+          <div className="flex flex-col sm:flex-row justify-end gap-3 pt-2 pb-4 sm:pb-0">
+            <button type="button" onClick={onCancel} className="w-full sm:w-auto px-6 py-2.5 rounded-lg text-slate-600 hover:bg-slate-100 font-medium transition-colors">
               キャンセル
             </button>
-            <button type="submit" className="px-6 py-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium shadow-lg shadow-blue-200 transition-all flex items-center gap-2">
+            <button type="submit" className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2">
               <Save size={18} />
               保存する
             </button>

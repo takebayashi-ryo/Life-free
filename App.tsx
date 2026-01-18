@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Settings, Wallet, TrendingUp, PiggyBank, Target, ArrowRight, LayoutDashboard, Calculator, CalendarClock, Coins, Trash2 } from 'lucide-react';
+import { Plus, Settings, Wallet, TrendingUp, PiggyBank, Target, ArrowRight, LayoutDashboard, Calculator, CalendarClock, Coins, Trash2, Lightbulb, Send, User, Bot } from 'lucide-react';
 import { MonthlyRecord, FinancialConfig, DEFAULT_CONFIG } from './types';
 import AnalysisChart from './components/AnalysisChart';
 import MonthEditor from './components/MonthEditor';
 import Simulator from './components/Simulator';
 import { calculateSimulation } from './services/simulationService';
 import { loadRecords, insertRecord, deleteRecord } from './services/dataService';
+import { generateDashboardAnswer } from './services/geminiService';
 
 // Mock local storage keys
 const STORAGE_KEY_DATA = 'assetflow_data_v1';
@@ -17,19 +18,29 @@ function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [config, setConfig] = useState<FinancialConfig>(DEFAULT_CONFIG);
   const [records, setRecords] = useState<MonthlyRecord[]>([]);
+  const [isLoadingRecords, setIsLoadingRecords] = useState(true);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<MonthlyRecord | undefined>(undefined);
 
   // Global Simulation State (Shared between Dashboard and Simulator)
   // Changed to strings to allow flexible input (decimals, empty state)
   const [simRateStr, setSimRateStr] = useState("5.0");
-  const [simMonthlyInvestStr, setSimMonthlyInvestStr] = useState("0"); 
+  const [simMonthlyInvestStr, setSimMonthlyInvestStr] = useState("0");
+
+  // AI Dashboard Q&A State
+  const [aiQuestions, setAiQuestions] = useState<Array<{ question: string; answer: string }>>([]);
+  const [currentQuestion, setCurrentQuestion] = useState('');
+  const [isGeneratingAnswer, setIsGeneratingAnswer] = useState(false); 
 
   // Load data on mount
   useEffect(() => {
     // Load records from Supabase
+    setIsLoadingRecords(true);
     loadRecords().then(loadedRecords => {
       setRecords(loadedRecords);
+      setIsLoadingRecords(false);
+    }).catch(() => {
+      setIsLoadingRecords(false);
     });
     
     // Load config from localStorage (config is still using localStorage)
@@ -75,7 +86,11 @@ function App() {
   }, [sortedRecords, config.initialCash]);
 
   const latestHistory = historyData.length > 0 ? historyData[historyData.length - 1] : null;
-  const currentCash = latestHistory ? latestHistory.calculatedTotalCash : config.initialCash;
+  // データ読み込み完了後のみ値を確定することで、読み込み前後での値の切り替わりを防ぐ
+  // 読み込み中でも一旦初期値を表示するが、読み込み完了後は確定値を使用
+  const currentCash = isLoadingRecords 
+    ? config.initialCash  // 読み込み中は初期値を表示
+    : (latestHistory ? latestHistory.calculatedTotalCash : config.initialCash); // 読み込み完了後はデータがあればその値、なければ初期値
   const currentInvestTotal = latestHistory ? latestHistory.calculatedTotalInvest : 0;
   
   // Initialize Sim Monthly Invest if not set yet (Run once or when logic dictates)
@@ -117,6 +132,13 @@ function App() {
     
     return Math.ceil(cashGap / avgFlow);
   }, [cashGap, sortedRecords]);
+
+  // Calculate recent average cash flow for AI advice
+  const recentAvgCashFlow = useMemo(() => {
+    const recentRecords = sortedRecords.slice(-6);
+    if (recentRecords.length === 0) return 0;
+    return recentRecords.reduce((sum, r) => sum + (r.calculatedCashFlow || 0), 0) / recentRecords.length;
+  }, [sortedRecords]);
 
   const handleSaveRecord = async (record: MonthlyRecord) => {
     // Insert new record to Supabase
@@ -168,6 +190,51 @@ function App() {
     const index = sortedRecords.findIndex(r => r.id === targetId);
     if (index > 0) return sortedRecords[index - 1];
     return undefined;
+  };
+
+  const handleAskQuestion = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+    
+    const question = currentQuestion.trim();
+    if (!question || isGeneratingAnswer) return;
+
+    // 質問を履歴に追加（回答は一時的に空）
+    const newQuestion = { question, answer: '' };
+    setAiQuestions(prev => [...prev, newQuestion]);
+    setCurrentQuestion('');
+    setIsGeneratingAnswer(true);
+
+    try {
+      const answer = await generateDashboardAnswer({
+        config,
+        currentCash,
+        currentInvestTotal,
+        historyData,
+        monthsToGoal,
+        cashGap,
+        simulationMilestones: simulationResult.milestones,
+        recentAvgCashFlow,
+        question,
+      });
+      
+      // 回答を履歴の最後の項目に追加
+      setAiQuestions(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1] = { ...updated[updated.length - 1], answer };
+        return updated;
+      });
+    } catch (error) {
+      console.error('Error generating answer:', error);
+      setAiQuestions(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1] = { ...updated[updated.length - 1], answer: 'AI回答の取得中にエラーが発生しました。' };
+        return updated;
+      });
+    } finally {
+      setIsGeneratingAnswer(false);
+    }
   };
 
   return (
@@ -287,6 +354,82 @@ function App() {
                          </div>
                      )}
                   </div>
+                </div>
+
+                {/* AI Q&A Section */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl shadow-sm border border-blue-200 p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Lightbulb size={20} className="text-amber-500" />
+                    <h2 className="text-lg font-bold text-slate-800">
+                      AI質問応答 - ダッシュボード全体の情報を元に回答します
+                    </h2>
+                  </div>
+
+                  {/* Chat History */}
+                  <div className="mb-4 space-y-4 max-h-[400px] overflow-y-auto">
+                    {aiQuestions.length === 0 && !isGeneratingAnswer && (
+                      <div className="text-center py-8 text-slate-500 text-sm">
+                        下のフォームから質問を入力してください。ダッシュボード全体の情報を元にAIが回答します。
+                      </div>
+                    )}
+                    {aiQuestions.map((item, idx) => (
+                      <div key={idx} className="space-y-3">
+                        {/* User Question */}
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                            <User size={16} className="text-white" />
+                          </div>
+                          <div className="flex-1 bg-white p-3 rounded-lg border border-blue-100 shadow-sm">
+                            <p className="text-sm text-slate-700 whitespace-pre-wrap">{item.question}</p>
+                          </div>
+                        </div>
+                        {/* AI Answer */}
+                        {item.answer && (
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center flex-shrink-0">
+                              <Bot size={16} className="text-white" />
+                            </div>
+                            <div className="flex-1 bg-white p-3 rounded-lg border border-amber-100 shadow-sm">
+                              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{item.answer}</p>
+                            </div>
+                          </div>
+                        )}
+                        {!item.answer && isGeneratingAnswer && idx === aiQuestions.length - 1 && (
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center flex-shrink-0">
+                              <Bot size={16} className="text-white" />
+                            </div>
+                            <div className="flex-1 bg-white p-3 rounded-lg border border-amber-100 shadow-sm">
+                              <div className="flex items-center gap-2 text-slate-500">
+                                <div className="w-4 h-4 border-2 border-slate-300 border-t-transparent rounded-full animate-spin"></div>
+                                <span className="text-sm">回答を生成中...</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Question Input Form */}
+                  <form onSubmit={handleAskQuestion} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={currentQuestion}
+                      onChange={(e) => setCurrentQuestion(e.target.value)}
+                      placeholder="例: 現金目標まであとどのくらいかかりますか？投資を増やしたほうがいいですか？"
+                      className="flex-1 px-4 py-2.5 bg-white border border-blue-200 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      disabled={isGeneratingAnswer}
+                    />
+                    <button
+                      type="submit"
+                      disabled={!currentQuestion.trim() || isGeneratingAnswer}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm"
+                    >
+                      <Send size={18} />
+                      送信
+                    </button>
+                  </form>
                 </div>
 
                 {/* Simulation Widget Card */}

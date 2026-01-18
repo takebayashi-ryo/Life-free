@@ -58,7 +58,7 @@ export const DEFAULT_CONFIG: FinancialConfig = {
   defaultCreditCard: 200000,
   pocketMoneyTarget: 50000,
   childAllowance: 30000,
-  initialCash: 800000,
+  initialCash: 0,
   targetCash: 1000000,
   targetInvestmentBase: 150000,
   targetInvestmentAddon: 30000,
