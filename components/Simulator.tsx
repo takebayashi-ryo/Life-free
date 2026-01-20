@@ -20,6 +20,7 @@ interface SimulatorProps {
   initialMonthlyInvest: number;
   sharedRate?: number; // Prop from parent
   onSharedChange?: (rate: number, monthlyInvest: number) => void; // Callback to parent
+  isMasked?: boolean; // 金額マスク状態（親から連動）
 }
 
 const STORAGE_KEY_CASES = 'assetflow_sim_cases_v1';
@@ -29,20 +30,28 @@ const Simulator: React.FC<SimulatorProps> = ({
     initialInvest, 
     initialMonthlyInvest,
     sharedRate,
-    onSharedChange 
+    onSharedChange,
+    isMasked = false,
 }) => {
   // Local state for params
   const [params, setParams] = useState({
     cash: initialCash.toString(),
     invest: initialInvest.toString(),
     monthlyInvest: (initialMonthlyInvest || 50000).toString(),
-    annualRate: (sharedRate || 5.0).toString(),
+    annualRate: (sharedRate || 6.0).toString(),
     targetAmount: "10000000",
   });
 
   const [savedCases, setSavedCases] = useState<SimulationCase[]>([]);
   const [caseNameInput, setCaseNameInput] = useState('');
   const [isSaveMode, setIsSaveMode] = useState(false);
+
+  const formatYen = (value: number | string) => {
+    if (isMasked) return '✳︎✳︎✳︎✳︎✳︎✳︎✳︎';
+    const num = Number(value);
+    const safe = Number.isNaN(num) ? 0 : num;
+    return `¥${safe.toLocaleString()}`;
+  };
 
   // Load saved cases
   useEffect(() => {
@@ -172,7 +181,7 @@ const Simulator: React.FC<SimulatorProps> = ({
                  >
                     <span>{c.name}</span>
                     <span className="text-xs text-slate-400 group-hover:text-blue-400">
-                        (¥{(c.monthlyInvest/10000).toFixed(0)}万/{c.annualRate}%)
+                        {isMasked ? '(✳︎✳︎✳︎✳︎✳︎✳︎✳︎/✳︎✳︎✳︎✳︎✳︎✳︎✳︎)' : `(¥${(c.monthlyInvest/10000).toFixed(0)}万/${c.annualRate}%)`}
                     </span>
                     <div 
                         onClick={(e) => handleDeleteCase(c.id, e)}
@@ -264,7 +273,15 @@ const Simulator: React.FC<SimulatorProps> = ({
                     <div>
                         <label className="block text-xs text-blue-600 mb-1 font-medium">想定年利 (%)</label>
                         <div className="relative">
-                             <input type="number" name="annualRate" value={params.annualRate} onChange={handleParamChange} step="0.1" className="w-full bg-white text-slate-900 pl-3 pr-8 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none font-bold" placeholder="5.0" />
+                             <input 
+                               type="number" 
+                               name="annualRate" 
+                               value={params.annualRate} 
+                               onChange={handleParamChange} 
+                               step="0.1" 
+                               className="w-full bg-white text-slate-900 pl-3 pr-8 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none font-bold" 
+                               placeholder="6.0" 
+                             />
                              <span className="absolute right-3 top-2.5 text-slate-400">%</span>
                         </div>
                     </div>
@@ -400,11 +417,15 @@ const Simulator: React.FC<SimulatorProps> = ({
                         />
                         <Tooltip 
                             formatter={(value: number, name: string) => {
-                                if (name === 'total') return [`¥${value.toLocaleString()}`, '合計資産'];
-                                if (name === 'investPrincipal') return [`¥${value.toLocaleString()}`, '投資元本'];
-                                if (name === 'investProfit') return [`¥${value.toLocaleString()}`, '運用益'];
-                                if (name === 'cash') return [`¥${value.toLocaleString()}`, '現金'];
-                                return [value, name];
+                                const label = (() => {
+                                  if (name === 'total') return '合計資産';
+                                  if (name === 'investPrincipal') return '投資元本';
+                                  if (name === 'investProfit') return '運用益';
+                                  if (name === 'cash') return '現金';
+                                  return name;
+                                })();
+                                if (isMasked) return ['✳︎✳︎✳︎✳︎✳︎✳︎✳︎', label];
+                                return [`¥${value.toLocaleString()}`, label];
                             }}
                             labelStyle={{ color: '#64748b' }}
                             contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
@@ -440,13 +461,13 @@ const Simulator: React.FC<SimulatorProps> = ({
                                         {row.yearIndex}年後 <span className="text-xs text-slate-400 block font-normal">{row.displayYear}年</span>
                                     </td>
                                     <td className="px-4 py-3 font-bold text-slate-800">
-                                        ¥{(row.total / 10000).toFixed(0)}万
+                                        {isMasked ? '✳︎✳︎✳︎✳︎✳︎✳︎✳︎' : `¥${(row.total / 10000).toFixed(0)}万`}
                                     </td>
                                     <td className="px-4 py-3 text-slate-600">
-                                        ¥{(row.investPrincipal / 10000).toFixed(0)}万
+                                        {isMasked ? '✳︎✳︎✳︎✳︎✳︎✳︎✳︎' : `¥${(row.investPrincipal / 10000).toFixed(0)}万`}
                                     </td>
                                     <td className="px-4 py-3 text-amber-600 font-medium">
-                                        +¥{(row.investProfit / 10000).toFixed(0)}万
+                                        {isMasked ? '✳︎✳︎✳︎✳︎✳︎✳︎✳︎' : `+¥${(row.investProfit / 10000).toFixed(0)}万`}
                                     </td>
                                 </tr>
                             ))}

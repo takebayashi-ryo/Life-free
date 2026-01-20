@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Settings, Wallet, TrendingUp, PiggyBank, Target, ArrowRight, LayoutDashboard, Calculator, CalendarClock, Coins, Trash2, Lightbulb, Send, User, Bot } from 'lucide-react';
+import { Plus, Settings, Wallet, TrendingUp, PiggyBank, Target, ArrowRight, LayoutDashboard, Calculator, CalendarClock, Coins, Trash2, Lightbulb, Send, User, Bot, Eye, EyeOff } from 'lucide-react';
 import { MonthlyRecord, FinancialConfig, DEFAULT_CONFIG } from './types';
 import AnalysisChart from './components/AnalysisChart';
 import MonthEditor from './components/MonthEditor';
@@ -24,13 +24,14 @@ function App() {
 
   // Global Simulation State (Shared between Dashboard and Simulator)
   // Changed to strings to allow flexible input (decimals, empty state)
-  const [simRateStr, setSimRateStr] = useState("5.0");
+  const [simRateStr, setSimRateStr] = useState("6.0");
   const [simMonthlyInvestStr, setSimMonthlyInvestStr] = useState("0");
 
   // AI Dashboard Q&A State
   const [aiQuestions, setAiQuestions] = useState<Array<{ question: string; answer: string }>>([]);
   const [currentQuestion, setCurrentQuestion] = useState('');
   const [isGeneratingAnswer, setIsGeneratingAnswer] = useState(false); 
+  const [isMasked, setIsMasked] = useState(false);
 
   // Load data on mount
   useEffect(() => {
@@ -120,6 +121,17 @@ function App() {
   }, [currentCash, currentInvestTotal, simMonthlyInvest, simRate]);
 
   const cashGap = config.targetCash - currentCash;
+
+  // Formatting helpers for masking monetary values
+  const formatYen = (value: number) => {
+    if (isMasked) return '✳︎✳︎✳︎✳︎✳︎✳︎✳︎';
+    return `¥${value.toLocaleString()}`;
+  };
+
+  const formatYenMan = (valueInMan: number) => {
+    if (isMasked) return '✳︎✳︎✳︎✳︎✳︎✳︎✳︎';
+    return `¥${valueInMan.toFixed(0)}万`;
+  };
   
   // Estimate months to goal (Cash only)
   const monthsToGoal = useMemo(() => {
@@ -246,9 +258,19 @@ function App() {
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">A</div>
             <h1 className="font-bold text-xl tracking-tight text-slate-900">AssetFlow</h1>
           </div>
-          <button className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
-            <Settings size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsMasked(prev => !prev)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors"
+              title="金額のマスキングを切り替え"
+            >
+              {isMasked ? <EyeOff size={14} /> : <Eye size={14} />}
+              <span>{isMasked ? '金額表示 OFF' : '金額表示 ON'}</span>
+            </button>
+            <button className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
+              <Settings size={20} />
+            </button>
+          </div>
         </div>
         
         {/* Navigation Tabs */}
@@ -286,7 +308,7 @@ function App() {
                         <Wallet size={16} /> 現金残高 (目標 100万)
                      </h2>
                      <div className="text-3xl font-bold text-slate-900 mb-4">
-                        ¥{currentCash.toLocaleString()}
+                        {formatYen(currentCash)}
                      </div>
                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-2">
                         <div 
@@ -295,9 +317,15 @@ function App() {
                         ></div>
                      </div>
                      <div className="flex justify-between text-xs font-medium">
-                        <span className="text-slate-400">達成率 {Math.round((currentCash / config.targetCash) * 100)}%</span>
+                        <span className="text-slate-400">
+                          {isMasked ? '達成率 ✳︎✳︎✳︎✳︎✳︎✳︎✳︎' : `達成率 ${Math.round((currentCash / config.targetCash) * 100)}%`}
+                        </span>
                         {cashGap > 0 ? (
-                            <span className="text-blue-600">あと ¥{cashGap.toLocaleString()} ({monthsToGoal > 0 ? `約${monthsToGoal}ヶ月` : '未定'})</span>
+                            <span className="text-blue-600">
+                              {isMasked
+                                ? 'あと ✳︎✳︎✳︎✳︎✳︎✳︎✳︎'
+                                : `あと ${formatYen(cashGap)} (${monthsToGoal > 0 ? `約${monthsToGoal}ヶ月` : '未定'})`}
+                            </span>
                         ) : (
                             <span className="text-green-600 flex items-center gap-1">目標達成! <PiggyBank size={12}/></span>
                         )}
@@ -311,19 +339,19 @@ function App() {
                      </h2>
                      <div className="flex items-baseline gap-2 mb-4">
                         <div className="text-3xl font-bold text-slate-900">
-                           ¥{currentInvestTotal.toLocaleString()}
+                           {formatYen(currentInvestTotal)}
                         </div>
                         <span className="text-xs text-slate-400 font-medium">総額 (評価額)</span>
                      </div>
                      
                      <div className="border-t pt-3">
-                       <p className="text-xs text-slate-500 mb-2">今月の積立: ¥{(latestHistory?.investmentTrust || 0).toLocaleString()}</p>
+                       <p className="text-xs text-slate-500 mb-2">今月の積立: {formatYen(latestHistory?.investmentTrust || 0)}</p>
                        <div className="flex gap-2 text-xs">
                           <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded border border-blue-100">
-                              基本: ¥{config.targetInvestmentBase.toLocaleString()}
+                              基本: {formatYen(config.targetInvestmentBase)}
                           </span>
                           <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded border border-indigo-100">
-                              +育児: ¥{config.targetInvestmentAddon.toLocaleString()}
+                              +育児: {formatYen(config.targetInvestmentAddon)}
                           </span>
                        </div>
                      </div>
@@ -449,7 +477,7 @@ function App() {
                                         value={simRateStr}
                                         onChange={(e) => setSimRateStr(e.target.value)}
                                         className="w-full pl-2 pr-6 py-1 bg-white text-slate-900 border border-slate-300 rounded-md font-bold focus:ring-2 focus:ring-blue-400 outline-none transition-colors"
-                                        placeholder="5.0"
+                                        placeholder="6.0"
                                         step="0.1"
                                     />
                                     <span className="absolute right-2 top-1.5 text-slate-400 text-xs pointer-events-none">%</span>
@@ -462,10 +490,11 @@ function App() {
                                     <span className="absolute left-2 top-1.5 text-slate-400 text-xs pointer-events-none">¥</span>
                                     <input 
                                         type="number" 
-                                        value={simMonthlyInvestStr}
+                                        value={isMasked ? 0 : simMonthlyInvestStr}
                                         onChange={(e) => setSimMonthlyInvestStr(e.target.value)}
                                         className="w-full pl-5 pr-2 py-1 bg-white text-slate-900 border border-slate-300 rounded-md font-bold focus:ring-2 focus:ring-blue-400 outline-none transition-colors"
-                                        placeholder="0"
+                                        placeholder={isMasked ? '✳︎✳︎✳︎✳︎✳︎✳︎✳︎' : '0'}
+                                        readOnly={isMasked}
                                     />
                                 </div>
                             </div>
@@ -482,10 +511,16 @@ function App() {
                              ].map((m) => (
                                  <div key={m.val} className={`flex-1 min-w-[200px] border rounded-xl p-4 flex items-center justify-between ${m.color}`}>
                                      <div>
-                                         <div className="text-xs font-semibold opacity-70 mb-1">資産 {m.val}万円</div>
+                                         <div className="text-xs font-semibold opacity-70 mb-1">
+                                           {isMasked ? '資産 ✳︎✳︎✳︎✳︎✳︎✳︎✳︎' : `資産 ${m.val}万円`}
+                                         </div>
                                          <div className="text-xl font-bold">
-                                             {m.date ? `${m.date.getFullYear()}年` : '---'}
-                                             <span className="text-sm ml-1 font-normal">{m.date ? `${m.date.getMonth() + 1}月` : ''}</span>
+                                             {isMasked
+                                               ? '✳︎✳︎✳︎✳︎✳︎✳︎✳︎'
+                                               : (m.date ? `${m.date.getFullYear()}年` : '---')}
+                                             <span className="text-sm ml-1 font-normal">
+                                               {isMasked ? '' : (m.date ? `${m.date.getMonth() + 1}月` : '')}
+                                             </span>
                                          </div>
                                      </div>
                                      {m.date ? <CalendarClock size={24} className="opacity-30" /> : <span className="text-xs opacity-50">未達</span>}
@@ -512,13 +547,13 @@ function App() {
                                                     {row.yearIndex}年後 <span className="text-xs text-slate-400 ml-1">({row.displayYear})</span>
                                                 </td>
                                                 <td className="px-6 py-3 font-bold text-slate-900 text-base">
-                                                    ¥{(row.total / 10000).toFixed(0)}万
+                                                    {formatYenMan(row.total / 10000)}
                                                 </td>
                                                 <td className="px-6 py-3 text-slate-600">
-                                                    ¥{(row.investPrincipal / 10000).toFixed(0)}万
+                                                    {formatYenMan(row.investPrincipal / 10000)}
                                                 </td>
                                                 <td className="px-6 py-3 text-amber-600 font-medium">
-                                                    +¥{(row.investProfit / 10000).toFixed(0)}万
+                                                    {isMasked ? '✳︎✳︎✳︎✳︎✳︎✳︎✳︎' : `+${formatYenMan(row.investProfit / 10000)}`}
                                                 </td>
                                             </tr>
                                         ))}
@@ -573,19 +608,19 @@ function App() {
                                 return (
                                     <tr key={record.id} className="hover:bg-slate-50 transition-colors group">
                                         <td className="px-6 py-4 font-medium text-slate-900">{record.id}</td>
-                                        <td className="px-6 py-4 text-slate-600">¥{income.toLocaleString()}</td>
-                                        <td className="px-6 py-4 text-slate-600">¥{expense.toLocaleString()}</td>
-                                        <td className="px-6 py-4 font-medium text-blue-600">¥{record.investmentTrust.toLocaleString()}</td>
+                                        <td className="px-6 py-4 text-slate-600">{formatYen(income)}</td>
+                                        <td className="px-6 py-4 text-slate-600">{formatYen(expense)}</td>
+                                        <td className="px-6 py-4 font-medium text-blue-600">{formatYen(record.investmentTrust)}</td>
                                         <td className="px-6 py-4">
-                                            <span className={`px-2 py-1 rounded text-xs font-semibold ${flow >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                {flow > 0 ? '+' : ''}{flow.toLocaleString()}
-                                            </span>
+                                                <span className={`px-2 py-1 rounded text-xs font-semibold ${flow >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                  {isMasked ? '✳︎✳︎✳︎✳︎✳︎✳︎✳︎' : `${flow > 0 ? '+' : ''}${flow.toLocaleString()}`}
+                                                </span>
                                         </td>
                                         <td className="px-6 py-4 bg-slate-50/50 font-medium text-slate-900 border-l border-slate-100">
-                                            ¥{record.calculatedTotalCash.toLocaleString()}
+                                            {formatYen(record.calculatedTotalCash)}
                                         </td>
                                         <td className="px-6 py-4 bg-slate-50/50 font-medium text-slate-900">
-                                            ¥{record.calculatedTotalInvest.toLocaleString()}
+                                            {formatYen(record.calculatedTotalInvest)}
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-2">
@@ -629,6 +664,7 @@ function App() {
                     setSimRateStr(rate.toString());
                     setSimMonthlyInvestStr(invest.toString());
                 }}
+                isMasked={isMasked}
             />
         )}
       </main>
