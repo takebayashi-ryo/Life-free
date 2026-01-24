@@ -70,6 +70,7 @@ function appToDb(appRecord: MonthlyRecord): MonthlyRecordDB {
  */
 export async function loadRecords(): Promise<MonthlyRecord[]> {
   try {
+    // キャッシュを無効化するために、タイムスタンプを追加
     const { data, error } = await supabase
       .from('monthly_records')
       .select('*')
@@ -95,7 +96,7 @@ export async function loadRecords(): Promise<MonthlyRecord[]> {
 /**
  * 新しい月次レコードを追加する
  */
-export async function insertRecord(record: MonthlyRecord): Promise<MonthlyRecord | null> {
+export async function insertRecord(record: MonthlyRecord): Promise<{ data: MonthlyRecord | null; error: string | null }> {
   try {
     // アプリケーション形式をデータベース形式に変換
     const dbRecord = appToDb(record);
@@ -108,18 +109,141 @@ export async function insertRecord(record: MonthlyRecord): Promise<MonthlyRecord
 
     if (error) {
       console.error('Error inserting record:', error);
-      return null;
+      return { data: null, error: error.message || 'レコードの追加に失敗しました' };
     }
 
     if (!data) {
-      return null;
+      return { data: null, error: 'データが返されませんでした' };
     }
 
     // データベース形式からアプリケーション形式に変換
-    return dbToApp(data);
+    return { data: dbToApp(data), error: null };
   } catch (error) {
     console.error('Error inserting record:', error);
-    return null;
+    const errorMessage = error instanceof Error ? error.message : '予期しないエラーが発生しました';
+    return { data: null, error: errorMessage };
+  }
+}
+
+/**
+ * 既存の月次レコードを更新する
+ */
+export async function updateRecord(record: MonthlyRecord): Promise<{ data: MonthlyRecord | null; error: string | null }> {
+  try {
+    // アプリケーション形式をデータベース形式に変換
+    const dbRecord = appToDb(record);
+
+    // UPDATEを実行（idは更新しない）
+    const updateData: Partial<MonthlyRecordDB> = {
+      month_str: dbRecord.month_str,
+      salary_income: dbRecord.salary_income,
+      side_hustle_income: dbRecord.side_hustle_income,
+      child_allowance_income: dbRecord.child_allowance_income,
+      nursery_expense: dbRecord.nursery_expense,
+      credit_card_expense: dbRecord.credit_card_expense,
+      pocket_money_expense: dbRecord.pocket_money_expense,
+      investment_trust: dbRecord.investment_trust,
+      total_cash_snapshot: dbRecord.total_cash_snapshot,
+      total_investment_snapshot: dbRecord.total_investment_snapshot,
+      note: dbRecord.note,
+      calculated_cash_flow: dbRecord.calculated_cash_flow,
+      total_assets: dbRecord.total_assets,
+      updated_at: new Date().toISOString()
+    };
+
+    // UPDATEを実行
+    const { data, error, count } = await supabase
+      .from('monthly_records')
+      .update(updateData)
+      .eq('id', record.id)
+      .select();
+
+    if (error) {
+      console.error('UPDATE error:', error);
+      return { data: null, error: `更新エラー: ${error.message} (code: ${error.code})` };
+    }
+
+    // 更新されたレコードがない場合
+    if (!data || data.length === 0) {
+      // countを確認（Supabaseの一部のバージョンではcountが利用可能）
+      if (count !== undefined && count === 0) {
+        return { data: null, error: `ID「${record.id}」のレコードが見つかりませんでした（更新対象0件）` };
+      }
+      return { data: null, error: `ID「${record.id}」のレコードが見つかりませんでした` };
+    }
+
+    // データベース形式からアプリケーション形式に変換（最初の1件を取得）
+    const updatedRecord = dbToApp(data[0]);
+    console.log('UPDATE成功:', updatedRecord.id);
+    return { data: updatedRecord, error: null };
+  } catch (error) {
+    console.error('UPDATE exception:', error);
+    const errorMessage = error instanceof Error ? error.message : '予期しないエラーが発生しました';
+    return { data: null, error: `更新例外: ${errorMessage}` };
+  }
+}
+
+/**
+ * 月次レコードを保存する（UPSERT: 存在すればUPDATE、存在しなければINSERT）
+ */
+export async function upsertRecord(record: MonthlyRecord): Promise<{ data: MonthlyRecord | null; error: string | null }> {
+  try {
+    // まず、レコードが存在するか確認
+    const { data: existingData, error: selectError } = await supabase
+      .from('monthly_records')
+      .select('id')
+      .eq('id', record.id)
+      .maybeSingle();
+
+    // 存在確認でエラーが発生した場合（PGRST116以外）
+    if (selectError && selectError.code !== 'PGRST116') {
+      return { data: null, error: `存在確認エラー: ${selectError.message} (code: ${selectError.code})` };
+    }
+
+    let result: { data: MonthlyRecord | null; error: string | null };
+
+    // レコードが存在する場合はUPDATE
+    if (existingData && existingData.id) {
+      result = await updateRecord(record);
+      
+      // UPDATEが成功した場合、データベースから最新データを取得して確認
+      if (result.data && !result.error) {
+        // 念のため、データベースから最新データを取得して確認
+        const { data: verifyData, error: verifyError } = await supabase
+          .from('monthly_records')
+          .select('*')
+          .eq('id', record.id)
+          .single();
+        
+        if (!verifyError && verifyData) {
+          // データベースから取得した最新データを返す
+          return { data: dbToApp(verifyData), error: null };
+        }
+      }
+      
+      return result;
+    } else {
+      // レコードが存在しない場合はINSERT
+      result = await insertRecord(record);
+      
+      // INSERTが成功した場合、データベースから最新データを取得して確認
+      if (result.data && !result.error) {
+        const { data: verifyData, error: verifyError } = await supabase
+          .from('monthly_records')
+          .select('*')
+          .eq('id', record.id)
+          .single();
+        
+        if (!verifyError && verifyData) {
+          return { data: dbToApp(verifyData), error: null };
+        }
+      }
+      
+      return result;
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '予期しないエラーが発生しました';
+    return { data: null, error: `例外: ${errorMessage}` };
   }
 }
 

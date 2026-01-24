@@ -10,9 +10,10 @@ interface MonthEditorProps {
   onSave: (record: MonthlyRecord) => void;
   onCancel: () => void;
   currentTotalCash: number;
+  isSaving?: boolean;
 }
 
-const MonthEditor: React.FC<MonthEditorProps> = ({ config, initialData, previousRecord, onSave, onCancel, currentTotalCash }) => {
+const MonthEditor: React.FC<MonthEditorProps> = ({ config, initialData, previousRecord, onSave, onCancel, currentTotalCash, isSaving = false }) => {
   // Use 'any' type for state to allow temporary empty strings in number inputs for better UX
   const [formData, setFormData] = useState<any>(initialData || {
     id: new Date().toISOString().slice(0, 7), // YYYY-MM
@@ -68,15 +69,43 @@ const MonthEditor: React.FC<MonthEditorProps> = ({ config, initialData, previous
     ? Number(formData.totalInvestmentSnapshot) - expectedInvest
     : 0;
 
-  // Effect: Pre-fill snapshots if editing a new record and they are empty
+  // Effect: initialDataが変更されたときにformDataを更新
+  // keyプロップで再マウントされるため、このuseEffectは主にモーダルが開かれたときの初期化用
   useEffect(() => {
-    if (!initialData) {
-        // If it's a new record, we might want to suggest the expected values?
-        // Let's not auto-fill the state to force user to confirm, 
-        // OR we can just leave them undefined and save the expected value if left blank.
-        // For this UI, let's let the placeholders do the work.
+    if (initialData) {
+      // 編集モードの場合、initialDataでformDataを更新
+      setFormData({
+        id: initialData.id,
+        monthStr: initialData.monthStr,
+        salaryIncome: initialData.salaryIncome,
+        sideHustleIncome: initialData.sideHustleIncome,
+        childAllowanceIncome: initialData.childAllowanceIncome,
+        nurseryExpense: initialData.nurseryExpense,
+        creditCardExpense: initialData.creditCardExpense,
+        pocketMoneyExpense: initialData.pocketMoneyExpense,
+        investmentTrust: initialData.investmentTrust,
+        totalCashSnapshot: initialData.totalCashSnapshot,
+        totalInvestmentSnapshot: initialData.totalInvestmentSnapshot,
+        note: initialData.note || '',
+      });
+    } else {
+      // 新規作成モードの場合、デフォルト値で初期化
+      setFormData({
+        id: new Date().toISOString().slice(0, 7),
+        monthStr: new Date().toISOString().slice(0, 7),
+        salaryIncome: config.baseSalary,
+        sideHustleIncome: 60000,
+        childAllowanceIncome: config.childAllowance,
+        nurseryExpense: config.nurseryFee,
+        creditCardExpense: config.defaultCreditCard,
+        pocketMoneyExpense: 0,
+        investmentTrust: config.targetInvestmentBase + config.targetInvestmentAddon,
+        totalCashSnapshot: undefined,
+        totalInvestmentSnapshot: undefined,
+        note: '',
+      });
     }
-  }, []);
+  }, [initialData, config]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -117,6 +146,12 @@ const MonthEditor: React.FC<MonthEditorProps> = ({ config, initialData, previous
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // 保存処理中の場合は何もしない
+    if (isSaving) {
+      return;
+    }
+    
     onSave({
       id: formData.id,
       monthStr: formData.id,
@@ -332,12 +367,37 @@ const MonthEditor: React.FC<MonthEditorProps> = ({ config, initialData, previous
           </div>
 
           <div className="flex flex-col sm:flex-row justify-end gap-3 pt-2 pb-4 sm:pb-0">
-            <button type="button" onClick={onCancel} className="w-full sm:w-auto px-6 py-2.5 rounded-lg text-slate-600 hover:bg-slate-100 font-medium transition-colors">
+            <button 
+              type="button" 
+              onClick={onCancel} 
+              disabled={isSaving}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-lg text-slate-600 hover:bg-slate-100 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               キャンセル
             </button>
-            <button type="submit" className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2">
-              <Save size={18} />
-              保存する
+            <button 
+              type="submit" 
+              disabled={isSaving}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={(e) => {
+                // 保存処理中の場合、submitを防ぐ
+                if (isSaving) {
+                  e.preventDefault();
+                  return false;
+                }
+              }}
+            >
+              {isSaving ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  保存中...
+                </>
+              ) : (
+                <>
+                  <Save size={18} />
+                  保存する
+                </>
+              )}
             </button>
           </div>
         </form>

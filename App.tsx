@@ -5,7 +5,7 @@ import AnalysisChart from './components/AnalysisChart';
 import MonthEditor from './components/MonthEditor';
 import Simulator from './components/Simulator';
 import { calculateSimulation } from './services/simulationService';
-import { loadRecords, insertRecord, deleteRecord } from './services/dataService';
+import { loadRecords, insertRecord, updateRecord, upsertRecord, deleteRecord } from './services/dataService';
 import { generateDashboardAnswer } from './services/geminiService';
 
 // Mock local storage keys
@@ -21,6 +21,7 @@ function App() {
   const [isLoadingRecords, setIsLoadingRecords] = useState(true);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<MonthlyRecord | undefined>(undefined);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Global Simulation State (Shared between Dashboard and Simulator)
   // Changed to strings to allow flexible input (decimals, empty state)
@@ -50,6 +51,15 @@ function App() {
       setConfig(JSON.parse(savedConfig));
     }
   }, []);
+
+  // モーダルが閉じられたときにすべての状態をリセット
+  useEffect(() => {
+    if (!isEditorOpen) {
+      // モーダルが閉じられたとき、すべての状態を確実にリセット
+      setIsSaving(false);
+      setEditingRecord(undefined);
+    }
+  }, [isEditorOpen]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(config));
@@ -153,28 +163,63 @@ function App() {
   }, [sortedRecords]);
 
   const handleSaveRecord = async (record: MonthlyRecord) => {
-    // Insert new record to Supabase
-    const insertedRecord = await insertRecord(record);
-    if (insertedRecord) {
-      // Update local state with the new record
-      setRecords(prev => {
-        // Check if record already exists (for safety, though we're only doing inserts)
-        const exists = prev.findIndex(r => r.id === record.id);
-        if (exists >= 0) {
-          // If exists, replace it (though we're only doing inserts in this phase)
-          const newRecords = [...prev];
-          newRecords[exists] = insertedRecord;
-          return newRecords;
-        }
-        return [...prev, insertedRecord];
-      });
+    // 既に保存処理中の場合は何もしない
+    if (isSaving) {
+      return;
     }
-    setIsEditorOpen(false);
-    setEditingRecord(undefined);
+
+    // 状態を確実にリセットしてから開始
+    setIsSaving(true);
+
+    try {
+      // UPSERTを使用: レコードが存在すればUPDATE、存在しなければINSERT
+      const result = await upsertRecord(record);
+      
+      if (result.error) {
+        alert(`保存に失敗しました。\n\nエラー: ${result.error}\n\nID: ${record.id}`);
+        return;
+      }
+      
+      if (!result.data) {
+        alert(`保存に失敗しました。\n\nデータが返されませんでした。\n\nID: ${record.id}`);
+        return;
+      }
+      
+      // データベースから最新データを再読み込み
+      setIsLoadingRecords(true);
+      const reloadedRecords = await loadRecords();
+      setRecords(reloadedRecords);
+      setIsLoadingRecords(false);
+      
+      // モーダルを閉じる（これによりuseEffectで状態がリセットされる）
+      setIsEditorOpen(false);
+      
+      // 成功メッセージ
+      alert('保存しました');
+      
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      alert(`保存中に予期しないエラーが発生しました: ${errorMsg}`);
+    } finally {
+      // 必ずisSavingをfalseにリセット
+      setIsSaving(false);
+    }
   };
 
   const handleEdit = (record: MonthlyRecord) => {
-    setEditingRecord(record);
+    // 保存処理中は編集画面を開かない
+    if (isSaving) {
+      return;
+    }
+    
+    // 状態を確実にリセット
+    setIsSaving(false);
+    
+    // records配列から最新のデータを取得
+    const latestRecord = records.find(r => r.id === record.id) || record;
+    
+    // 編集画面を開く
+    setEditingRecord(latestRecord);
     setIsEditorOpen(true);
   };
 
@@ -191,6 +236,13 @@ function App() {
   };
 
   const handleAddNew = () => {
+    // 保存処理中は新規追加を防ぐ
+    if (isSaving) {
+      return;
+    }
+    
+    // 状態を確実にリセット
+    setIsSaving(false);
     setEditingRecord(undefined);
     setIsEditorOpen(true);
   };
@@ -672,12 +724,19 @@ function App() {
       {/* Editor Modal */}
       {isEditorOpen && (
         <MonthEditor 
+            key={`${editingRecord?.id || 'new'}-${isEditorOpen}`} // keyを追加して、editingRecordが変更されたときに強制的に再マウント
             config={config} 
             initialData={editingRecord}
             previousRecord={getPreviousRecord(editingRecord?.id)}
             onSave={handleSaveRecord} 
-            onCancel={() => setIsEditorOpen(false)}
+            onCancel={() => {
+              // キャンセル時は状態を確実にリセット
+              setIsEditorOpen(false);
+              setEditingRecord(undefined);
+              setIsSaving(false);
+            }}
             currentTotalCash={currentCash}
+            isSaving={isSaving}
         />
       )}
     </div>
