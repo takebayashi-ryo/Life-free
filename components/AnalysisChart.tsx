@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine
@@ -12,7 +12,20 @@ interface AnalysisChartProps {
   accumulatedInvest: number[];
 }
 
+function useIsDark() {
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark;
+}
+
 const AnalysisChart: React.FC<AnalysisChartProps> = ({ data, config, accumulatedCash, accumulatedInvest }) => {
+  const isDark = useIsDark();
   const chartData = data.map((record, index) => ({
     ...record,
     cashBalance: accumulatedCash[index],
@@ -21,25 +34,35 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data, config, accumulated
 
   const sortedData = [...chartData].sort((a, b) => a.id.localeCompare(b.id));
 
+  const colors = {
+    grid: isDark ? '#27272a' : '#e4e4e7',
+    axis: isDark ? '#71717a' : '#a1a1aa',
+    tooltipBg: isDark ? '#18181b' : '#ffffff',
+    tooltipBorder: isDark ? '#3f3f46' : '#e4e4e7',
+    tooltipText: isDark ? '#f4f4f5' : '#18181b',
+    tooltipLabel: isDark ? '#a1a1aa' : '#71717a',
+    bar: isDark ? '#52525b' : '#a1a1aa',
+    cash: '#10b981',
+    invest: isDark ? '#60a5fa' : '#3b82f6',
+    target: '#ef4444',
+  };
+
   return (
-    <div className="h-[360px] w-full bg-zinc-900 border border-zinc-800 p-5 rounded-2xl">
-      <h3 className="text-base font-semibold text-zinc-100 mb-4">資産推移</h3>
+    <div className="h-[340px] w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 rounded-2xl">
+      <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-3">資産推移</h3>
       {sortedData.length === 0 ? (
-        <div className="flex items-center justify-center h-[260px] text-sm text-zinc-500">
+        <div className="flex items-center justify-center h-[240px] text-sm text-zinc-500">
           データが追加されるとここにグラフが表示されます
         </div>
       ) : (
         <ResponsiveContainer width="100%" height="85%">
-          <ComposedChart
-            data={sortedData}
-            margin={{ top: 10, right: 10, bottom: 10, left: 0 }}
-          >
-            <CartesianGrid stroke="#27272a" strokeDasharray="3 3" vertical={false} />
+          <ComposedChart data={sortedData} margin={{ top: 10, right: 10, bottom: 10, left: 0 }}>
+            <CartesianGrid stroke={colors.grid} strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="monthStr"
               scale="point"
               padding={{ left: 10, right: 10 }}
-              tick={{ fontSize: 10, fill: '#71717a' }}
+              tick={{ fontSize: 10, fill: colors.axis }}
               axisLine={false}
               tickLine={false}
             />
@@ -47,7 +70,7 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data, config, accumulated
               yAxisId="left"
               orientation="left"
               tickFormatter={(value) => `${value / 10000}万`}
-              tick={{ fontSize: 10, fill: '#71717a' }}
+              tick={{ fontSize: 10, fill: colors.axis }}
               axisLine={false}
               tickLine={false}
             />
@@ -55,7 +78,7 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data, config, accumulated
               yAxisId="right"
               orientation="right"
               tickFormatter={(value) => `${value / 10000}万`}
-              tick={{ fontSize: 10, fill: '#71717a' }}
+              tick={{ fontSize: 10, fill: colors.axis }}
               axisLine={false}
               tickLine={false}
               domain={['auto', 'auto']}
@@ -68,15 +91,15 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data, config, accumulated
                 return [`¥${value.toLocaleString()}`, name];
               }}
               contentStyle={{
-                backgroundColor: '#18181b',
+                backgroundColor: colors.tooltipBg,
                 borderRadius: '8px',
-                border: '1px solid #3f3f46',
-                color: '#f4f4f5'
+                border: `1px solid ${colors.tooltipBorder}`,
+                color: colors.tooltipText
               }}
-              labelStyle={{ color: '#a1a1aa' }}
+              labelStyle={{ color: colors.tooltipLabel }}
             />
             <Legend
-              wrapperStyle={{ paddingTop: '10px', fontSize: '11px', color: '#a1a1aa' }}
+              wrapperStyle={{ paddingTop: '10px', fontSize: '11px', color: colors.axis }}
               formatter={(value) => {
                 if (value === 'investmentTrust') return '月次投資';
                 if (value === 'cashBalance') return '現金残高';
@@ -85,11 +108,11 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data, config, accumulated
               }}
             />
 
-            <ReferenceLine y={config.targetCash} yAxisId="right" label={{ value: '現金目標', fill: '#f87171', fontSize: 10 }} stroke="#ef4444" strokeDasharray="3 3" />
+            <ReferenceLine y={config.targetCash} yAxisId="right" label={{ value: '目標', fill: colors.target, fontSize: 10 }} stroke={colors.target} strokeDasharray="3 3" />
 
-            <Bar yAxisId="left" dataKey="investmentTrust" name="investmentTrust" barSize={16} fill="#1d4ed8" opacity={0.7} radius={[4, 4, 0, 0]} />
-            <Line yAxisId="right" type="monotone" dataKey="cashBalance" name="cashBalance" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3, fill: '#10b981' }} activeDot={{ r: 5 }} />
-            <Line yAxisId="right" type="monotone" dataKey="investBalance" name="investBalance" stroke="#60a5fa" strokeWidth={2.5} dot={{ r: 3, fill: '#60a5fa' }} activeDot={{ r: 5 }} />
+            <Bar yAxisId="left" dataKey="investmentTrust" name="investmentTrust" barSize={14} fill={colors.bar} opacity={0.6} radius={[3, 3, 0, 0]} />
+            <Line yAxisId="right" type="monotone" dataKey="cashBalance" name="cashBalance" stroke={colors.cash} strokeWidth={2} dot={{ r: 3, fill: colors.cash }} activeDot={{ r: 5 }} />
+            <Line yAxisId="right" type="monotone" dataKey="investBalance" name="investBalance" stroke={colors.invest} strokeWidth={2} dot={{ r: 3, fill: colors.invest }} activeDot={{ r: 5 }} />
           </ComposedChart>
         </ResponsiveContainer>
       )}
