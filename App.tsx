@@ -1,21 +1,25 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Settings, Wallet, TrendingUp, PiggyBank, Target, ArrowRight, LayoutDashboard, Calculator, CalendarClock, Coins, Trash2, Lightbulb, Send, User, Bot, Eye, EyeOff } from 'lucide-react';
+import {
+  Plus, Settings, Wallet, Target, Calculator,
+  Coins, Trash2, Send, User, Bot, Eye, EyeOff,
+  Home, BookOpen, BarChart3, Sparkles, ChevronRight, Edit3, PiggyBank
+} from 'lucide-react';
 import { MonthlyRecord, FinancialConfig, DEFAULT_CONFIG } from './types';
 import AnalysisChart from './components/AnalysisChart';
 import MonthEditor from './components/MonthEditor';
 import Simulator from './components/Simulator';
 import { calculateSimulation } from './services/simulationService';
-import { loadRecords, insertRecord, updateRecord, upsertRecord, deleteRecord } from './services/dataService';
+import { loadRecords, upsertRecord, deleteRecord } from './services/dataService';
 import { generateDashboardAnswer } from './services/geminiService';
 
-// Mock local storage keys
-const STORAGE_KEY_DATA = 'assetflow_data_v1';
 const STORAGE_KEY_CONFIG = 'assetflow_config_v1';
 
-type Tab = 'dashboard' | 'simulator';
+type Tab = 'home' | 'records' | 'simulator' | 'analysis' | 'settings';
+
+const MASK = '✳︎✳︎✳︎✳︎✳︎✳︎';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [activeTab, setActiveTab] = useState<Tab>('home');
   const [config, setConfig] = useState<FinancialConfig>(DEFAULT_CONFIG);
   const [records, setRecords] = useState<MonthlyRecord[]>([]);
   const [isLoadingRecords, setIsLoadingRecords] = useState(true);
@@ -23,20 +27,15 @@ function App() {
   const [editingRecord, setEditingRecord] = useState<MonthlyRecord | undefined>(undefined);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Global Simulation State (Shared between Dashboard and Simulator)
-  // Changed to strings to allow flexible input (decimals, empty state)
   const [simRateStr, setSimRateStr] = useState("6.0");
   const [simMonthlyInvestStr, setSimMonthlyInvestStr] = useState("0");
 
-  // AI Dashboard Q&A State
   const [aiQuestions, setAiQuestions] = useState<Array<{ question: string; answer: string }>>([]);
   const [currentQuestion, setCurrentQuestion] = useState('');
-  const [isGeneratingAnswer, setIsGeneratingAnswer] = useState(false); 
+  const [isGeneratingAnswer, setIsGeneratingAnswer] = useState(false);
   const [isMasked, setIsMasked] = useState(false);
 
-  // Load data on mount
   useEffect(() => {
-    // Load records from Supabase
     setIsLoadingRecords(true);
     loadRecords().then(loadedRecords => {
       setRecords(loadedRecords);
@@ -44,18 +43,15 @@ function App() {
     }).catch(() => {
       setIsLoadingRecords(false);
     });
-    
-    // Load config from localStorage (config is still using localStorage)
+
     const savedConfig = localStorage.getItem(STORAGE_KEY_CONFIG);
     if (savedConfig) {
       setConfig(JSON.parse(savedConfig));
     }
   }, []);
 
-  // モーダルが閉じられたときにすべての状態をリセット
   useEffect(() => {
     if (!isEditorOpen) {
-      // モーダルが閉じられたとき、すべての状態を確実にリセット
       setIsSaving(false);
       setEditingRecord(undefined);
     }
@@ -65,12 +61,10 @@ function App() {
     localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(config));
   }, [config]);
 
-  // Calculations
   const sortedRecords = useMemo(() => {
     return [...records].sort((a, b) => a.id.localeCompare(b.id));
   }, [records]);
 
-  // Calculate History
   const historyData = useMemo(() => {
     let currentCash = config.initialCash;
     let currentInvest = 0;
@@ -97,65 +91,52 @@ function App() {
   }, [sortedRecords, config.initialCash]);
 
   const latestHistory = historyData.length > 0 ? historyData[historyData.length - 1] : null;
-  // データ読み込み完了後のみ値を確定することで、読み込み前後での値の切り替わりを防ぐ
-  // 読み込み中でも一旦初期値を表示するが、読み込み完了後は確定値を使用
-  const currentCash = isLoadingRecords 
-    ? config.initialCash  // 読み込み中は初期値を表示
-    : (latestHistory ? latestHistory.calculatedTotalCash : config.initialCash); // 読み込み完了後はデータがあればその値、なければ初期値
+  const currentCash = isLoadingRecords
+    ? config.initialCash
+    : (latestHistory ? latestHistory.calculatedTotalCash : config.initialCash);
   const currentInvestTotal = latestHistory ? latestHistory.calculatedTotalInvest : 0;
-  
-  // Initialize Sim Monthly Invest if not set yet (Run once or when logic dictates)
-  useEffect(() => {
-      // Only set if user hasn't typed anything yet (i.e., it's "0")
-      if (simMonthlyInvestStr === "0") {
-          if (latestHistory) {
-              setSimMonthlyInvestStr(latestHistory.investmentTrust.toString());
-          } else {
-              setSimMonthlyInvestStr((config.targetInvestmentBase + config.targetInvestmentAddon).toString());
-          }
-      }
-  }, [latestHistory, config]); // Removed simMonthlyInvestStr from dependency to prevent overwrite while typing
+  const totalAssets = currentCash + currentInvestTotal;
 
-  // Derived numeric values for calculation
+  useEffect(() => {
+    if (simMonthlyInvestStr === "0") {
+      if (latestHistory) {
+        setSimMonthlyInvestStr(latestHistory.investmentTrust.toString());
+      } else {
+        setSimMonthlyInvestStr((config.targetInvestmentBase + config.targetInvestmentAddon).toString());
+      }
+    }
+  }, [latestHistory, config]);
+
   const simRate = parseFloat(simRateStr) || 0;
   const simMonthlyInvest = parseFloat(simMonthlyInvestStr) || 0;
 
-  // Run Global Simulation for Dashboard
   const simulationResult = useMemo(() => {
-      return calculateSimulation(
-          currentCash,
-          currentInvestTotal,
-          simMonthlyInvest,
-          simRate
-      );
+    return calculateSimulation(currentCash, currentInvestTotal, simMonthlyInvest, simRate);
   }, [currentCash, currentInvestTotal, simMonthlyInvest, simRate]);
 
   const cashGap = config.targetCash - currentCash;
 
-  // Formatting helpers for masking monetary values
   const formatYen = (value: number) => {
-    if (isMasked) return '✳︎✳︎✳︎✳︎✳︎✳︎✳︎';
+    if (isMasked) return MASK;
     return `¥${value.toLocaleString()}`;
   };
 
   const formatYenMan = (valueInMan: number) => {
-    if (isMasked) return '✳︎✳︎✳︎✳︎✳︎✳︎✳︎';
+    if (isMasked) return MASK;
     return `¥${valueInMan.toFixed(0)}万`;
   };
-  
-  // Estimate months to goal (Cash only)
+
   const monthsToGoal = useMemo(() => {
     if (cashGap <= 0) return 0;
     const recentRecords = sortedRecords.slice(-3);
     if (recentRecords.length === 0) return -1;
-    
+
     const avgFlow = recentRecords.reduce((sum, r) => sum + (r.calculatedCashFlow || 0), 0) / recentRecords.length;
-    if (avgFlow <= 0) return -1; 
-    
+    if (avgFlow <= 0) return -1;
+
     return Math.ceil(cashGap / avgFlow);
   }, [cashGap, sortedRecords]);
 
-  // Calculate recent average cash flow for AI advice
   const recentAvgCashFlow = useMemo(() => {
     const recentRecords = sortedRecords.slice(-6);
     if (recentRecords.length === 0) return 0;
@@ -163,62 +144,39 @@ function App() {
   }, [sortedRecords]);
 
   const handleSaveRecord = async (record: MonthlyRecord) => {
-    // 既に保存処理中の場合は何もしない
-    if (isSaving) {
-      return;
-    }
-
-    // 状態を確実にリセットしてから開始
+    if (isSaving) return;
     setIsSaving(true);
 
     try {
-      // UPSERTを使用: レコードが存在すればUPDATE、存在しなければINSERT
       const result = await upsertRecord(record);
-      
       if (result.error) {
         alert(`保存に失敗しました。\n\nエラー: ${result.error}\n\nID: ${record.id}`);
         return;
       }
-      
       if (!result.data) {
         alert(`保存に失敗しました。\n\nデータが返されませんでした。\n\nID: ${record.id}`);
         return;
       }
-      
-      // データベースから最新データを再読み込み
+
       setIsLoadingRecords(true);
       const reloadedRecords = await loadRecords();
       setRecords(reloadedRecords);
       setIsLoadingRecords(false);
-      
-      // モーダルを閉じる（これによりuseEffectで状態がリセットされる）
+
       setIsEditorOpen(false);
-      
-      // 成功メッセージ
       alert('保存しました');
-      
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       alert(`保存中に予期しないエラーが発生しました: ${errorMsg}`);
     } finally {
-      // 必ずisSavingをfalseにリセット
       setIsSaving(false);
     }
   };
 
   const handleEdit = (record: MonthlyRecord) => {
-    // 保存処理中は編集画面を開かない
-    if (isSaving) {
-      return;
-    }
-    
-    // 状態を確実にリセット
+    if (isSaving) return;
     setIsSaving(false);
-    
-    // records配列から最新のデータを取得
     const latestRecord = records.find(r => r.id === record.id) || record;
-    
-    // 編集画面を開く
     setEditingRecord(latestRecord);
     setIsEditorOpen(true);
   };
@@ -227,7 +185,6 @@ function App() {
     if (window.confirm(`「${record.id}」の記録を削除しますか？`)) {
       const success = await deleteRecord(record.id);
       if (success) {
-        // ローカルstateからも削除
         setRecords(prev => prev.filter(r => r.id !== record.id));
       } else {
         alert('削除に失敗しました。');
@@ -236,12 +193,7 @@ function App() {
   };
 
   const handleAddNew = () => {
-    // 保存処理中は新規追加を防ぐ
-    if (isSaving) {
-      return;
-    }
-    
-    // 状態を確実にリセット
+    if (isSaving) return;
     setIsSaving(false);
     setEditingRecord(undefined);
     setIsEditorOpen(true);
@@ -257,14 +209,10 @@ function App() {
   };
 
   const handleAskQuestion = async (e?: React.FormEvent) => {
-    if (e) {
-      e.preventDefault();
-    }
-    
+    if (e) e.preventDefault();
     const question = currentQuestion.trim();
     if (!question || isGeneratingAnswer) return;
 
-    // 質問を履歴に追加（回答は一時的に空）
     const newQuestion = { question, answer: '' };
     setAiQuestions(prev => [...prev, newQuestion]);
     setCurrentQuestion('');
@@ -272,18 +220,11 @@ function App() {
 
     try {
       const answer = await generateDashboardAnswer({
-        config,
-        currentCash,
-        currentInvestTotal,
-        historyData,
-        monthsToGoal,
-        cashGap,
+        config, currentCash, currentInvestTotal, historyData,
+        monthsToGoal, cashGap,
         simulationMilestones: simulationResult.milestones,
-        recentAvgCashFlow,
-        question,
+        recentAvgCashFlow, question,
       });
-      
-      // 回答を履歴の最後の項目に追加
       setAiQuestions(prev => {
         const updated = [...prev];
         updated[updated.length - 1] = { ...updated[updated.length - 1], answer };
@@ -301,442 +242,555 @@ function App() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 pb-20">
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">A</div>
-            <h1 className="font-bold text-xl tracking-tight text-slate-900">AssetFlow</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsMasked(prev => !prev)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors"
-              title="金額のマスキングを切り替え"
-            >
-              {isMasked ? <EyeOff size={14} /> : <Eye size={14} />}
-              <span>{isMasked ? '金額表示 OFF' : '金額表示 ON'}</span>
-            </button>
-            <button className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
-              <Settings size={20} />
-            </button>
+  const handleConfigChange = (field: keyof FinancialConfig, value: string) => {
+    const num = parseFloat(value) || 0;
+    setConfig(prev => ({ ...prev, [field]: num }));
+  };
+
+  // ===== Sub Renderers =====
+  const renderHome = () => {
+    const cashProgress = Math.min((currentCash / config.targetCash) * 100, 100);
+    const recentRecords = historyData.slice(-3).reverse();
+
+    return (
+      <div className="space-y-5">
+        {/* Hero Total Assets Card */}
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border border-zinc-800 p-6 shadow-xl">
+          <div className="absolute -top-10 -right-10 w-48 h-48 bg-blue-600/10 rounded-full blur-3xl"></div>
+          <div className="absolute -bottom-10 -left-10 w-48 h-48 bg-emerald-600/5 rounded-full blur-3xl"></div>
+
+          <div className="relative">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-zinc-400 font-medium">総資産</span>
+              <div className="w-10 h-10 bg-zinc-800/80 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                <Wallet size={20} className="text-blue-400" />
+              </div>
+            </div>
+            <div className="text-4xl font-extrabold text-white tracking-tight mb-6">
+              {formatYen(totalAssets)}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-4 border-t border-zinc-800/80">
+              <div>
+                <div className="text-xs text-zinc-500 mb-1">現金残高</div>
+                <div className="text-lg font-bold text-white">{formatYen(currentCash)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-zinc-500 mb-1">投資評価額</div>
+                <div className="text-lg font-bold text-white">{formatYen(currentInvestTotal)}</div>
+              </div>
+            </div>
           </div>
         </div>
-        
-        {/* Navigation Tabs */}
-        <div className="max-w-5xl mx-auto px-4">
-            <div className="flex gap-6 -mb-px">
-                <button 
-                    onClick={() => setActiveTab('dashboard')}
-                    className={`flex items-center gap-2 py-3 border-b-2 transition-colors font-medium text-sm ${activeTab === 'dashboard' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-                >
-                    <LayoutDashboard size={18} />
-                    ダッシュボード
-                </button>
-                <button 
-                    onClick={() => setActiveTab('simulator')}
-                    className={`flex items-center gap-2 py-3 border-b-2 transition-colors font-medium text-sm ${activeTab === 'simulator' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-                >
-                    <Calculator size={18} />
-                    資産シミュレーター
-                </button>
+
+        {/* Cash Goal Progress */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <PiggyBank size={18} className="text-emerald-400" />
+              <span className="text-sm font-medium text-zinc-300">現金目標 (¥{(config.targetCash / 10000).toFixed(0)}万)</span>
             </div>
+            <span className="text-xs text-zinc-500">
+              {isMasked ? MASK : `${Math.round(cashProgress)}%`}
+            </span>
+          </div>
+          <div className="w-full bg-zinc-800 h-2 rounded-full overflow-hidden mb-2">
+            <div
+              className={`h-full rounded-full transition-all duration-1000 ${currentCash >= config.targetCash ? 'bg-emerald-500' : 'bg-gradient-to-r from-blue-500 to-emerald-500'}`}
+              style={{ width: `${cashProgress}%` }}
+            ></div>
+          </div>
+          <div className="flex justify-between text-xs">
+            {cashGap > 0 ? (
+              <span className="text-zinc-400">
+                {isMasked ? `あと ${MASK}` : `あと ${formatYen(cashGap)}`}
+                {!isMasked && monthsToGoal > 0 && ` · 約${monthsToGoal}ヶ月`}
+              </span>
+            ) : (
+              <span className="text-emerald-400 font-medium">目標達成！</span>
+            )}
+          </div>
+        </div>
+
+        {/* Strategy Phase */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <Target size={16} className="text-amber-400" />
+            <span className="text-xs font-medium text-zinc-400">現在の戦略</span>
+          </div>
+          {currentCash < config.targetCash ? (
+            <>
+              <div className="text-lg font-bold text-amber-400 mb-1.5">現金優先フェーズ</div>
+              <p className="text-sm text-zinc-400 leading-relaxed">
+                生活防衛資金が{(config.targetCash / 10000).toFixed(0)}万円に達するまで、副業収入と余剰資金はすべて現金としてプール
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="text-lg font-bold text-emerald-400 mb-1.5">投資最大化フェーズ</div>
+              <p className="text-sm text-zinc-400 leading-relaxed">
+                現金目標を達成！余剰資金を積極的に投資信託へ回し、資産拡大を加速させましょう
+              </p>
+            </>
+          )}
+        </div>
+
+        {/* Quick Sim Preview */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Coins size={16} className="text-blue-400" />
+              <span className="text-sm font-medium text-zinc-300">将来予測（年利{simRate}%）</span>
+            </div>
+            <button
+              onClick={() => setActiveTab('simulator')}
+              className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-0.5"
+            >
+              詳細<ChevronRight size={12} />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { val: 1000, date: simulationResult.milestones.m1000 },
+              { val: 3000, date: simulationResult.milestones.m3000 },
+              { val: 5000, date: simulationResult.milestones.m5000 }
+            ].map((m) => (
+              <div key={m.val} className="bg-zinc-800/60 border border-zinc-800 rounded-xl p-3">
+                <div className="text-[10px] text-zinc-500 mb-1">
+                  {isMasked ? MASK : `${m.val}万円`}
+                </div>
+                <div className="text-sm font-bold text-zinc-100">
+                  {isMasked
+                    ? MASK
+                    : (m.date ? `${m.date.getFullYear()}/${m.date.getMonth() + 1}` : '---')}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Recent Records */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
+            <span className="text-sm font-medium text-zinc-300">最近の記録</span>
+            <button
+              onClick={() => setActiveTab('records')}
+              className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-0.5"
+            >
+              すべて見る<ChevronRight size={12} />
+            </button>
+          </div>
+          {recentRecords.length === 0 ? (
+            <div className="px-5 py-8 text-center">
+              <div className="text-sm text-zinc-500 mb-3">まだ記録がありません</div>
+              <button
+                onClick={handleAddNew}
+                className="text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium transition-colors inline-flex items-center gap-1.5"
+              >
+                <Plus size={14} />最初の記録を追加
+              </button>
+            </div>
+          ) : (
+            <div className="divide-y divide-zinc-800">
+              {recentRecords.map(record => {
+                const flow = record.calculatedCashFlow || 0;
+                return (
+                  <button
+                    key={record.id}
+                    onClick={() => handleEdit(record)}
+                    className="w-full px-5 py-4 flex items-center justify-between hover:bg-zinc-800/50 transition-colors text-left"
+                  >
+                    <div>
+                      <div className="text-sm font-medium text-zinc-100 mb-0.5">{record.id}</div>
+                      <div className="text-xs text-zinc-500">
+                        {isMasked ? MASK : `現金 ${formatYen(record.calculatedTotalCash)}`}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-semibold ${flow >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {isMasked ? MASK : `${flow > 0 ? '+' : ''}${flow.toLocaleString()}`}
+                      </span>
+                      <ChevronRight size={16} className="text-zinc-600" />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderRecords = () => {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-white">月次レポート</h2>
+            <p className="text-xs text-zinc-500 mt-1">{historyData.length}件の記録</p>
+          </div>
+          <button
+            onClick={handleAddNew}
+            className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2.5 rounded-xl font-medium transition-colors flex items-center gap-1.5 shadow-lg shadow-blue-900/30"
+          >
+            <Plus size={16} />
+            追加
+          </button>
+        </div>
+
+        {historyData.length === 0 ? (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl py-16 text-center">
+            <div className="w-14 h-14 bg-zinc-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <BookOpen size={26} className="text-zinc-500" />
+            </div>
+            <div className="text-sm text-zinc-400 mb-4">まだ記録がありません</div>
+            <button
+              onClick={handleAddNew}
+              className="text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium inline-flex items-center gap-1.5"
+            >
+              <Plus size={14} />最初の記録を追加
+            </button>
+          </div>
+        ) : (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+            <div className="divide-y divide-zinc-800">
+              {historyData.slice().reverse().map(record => {
+                const income = record.salaryIncome + record.sideHustleIncome + record.childAllowanceIncome;
+                const expense = record.nurseryExpense + record.creditCardExpense + record.pocketMoneyExpense;
+                const flow = record.calculatedCashFlow || 0;
+
+                return (
+                  <div key={record.id} className="px-5 py-4 hover:bg-zinc-800/40 transition-colors group">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-base font-bold text-white">{record.id}</div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleEdit(record)}
+                          className="p-1.5 text-zinc-400 hover:text-blue-400 hover:bg-zinc-800 rounded-lg transition-colors"
+                          title="編集"
+                        >
+                          <Edit3 size={15} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(record)}
+                          className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 rounded-lg transition-colors"
+                          title="削除"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div className="bg-zinc-800/50 rounded-lg px-3 py-2">
+                        <div className="text-zinc-500 mb-0.5">収入</div>
+                        <div className="text-emerald-400 font-semibold">{formatYen(income)}</div>
+                      </div>
+                      <div className="bg-zinc-800/50 rounded-lg px-3 py-2">
+                        <div className="text-zinc-500 mb-0.5">支出</div>
+                        <div className="text-rose-400 font-semibold">{formatYen(expense)}</div>
+                      </div>
+                      <div className="bg-zinc-800/50 rounded-lg px-3 py-2">
+                        <div className="text-zinc-500 mb-0.5">投資</div>
+                        <div className="text-blue-400 font-semibold">{formatYen(record.investmentTrust)}</div>
+                      </div>
+                      <div className="bg-zinc-800/50 rounded-lg px-3 py-2">
+                        <div className="text-zinc-500 mb-0.5">現金増減</div>
+                        <div className={`font-semibold ${flow >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {isMasked ? MASK : `${flow > 0 ? '+' : ''}${flow.toLocaleString()}`}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-zinc-800/50 text-xs">
+                      <span className="text-zinc-500">月末残高</span>
+                      <div className="flex gap-3">
+                        <span className="text-zinc-300">現金 <span className="font-semibold text-white">{formatYen(record.calculatedTotalCash)}</span></span>
+                        <span className="text-zinc-300">投資 <span className="font-semibold text-white">{formatYen(record.calculatedTotalInvest)}</span></span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderAnalysis = () => {
+    return (
+      <div className="space-y-5">
+        <div>
+          <h2 className="text-xl font-bold text-white">分析 & AI相談</h2>
+          <p className="text-xs text-zinc-500 mt-1">資産の推移とAIによるアドバイス</p>
+        </div>
+
+        {/* Chart */}
+        <AnalysisChart
+          data={sortedRecords}
+          config={config}
+          accumulatedCash={historyData.map(h => h.calculatedTotalCash)}
+          accumulatedInvest={historyData.map(h => h.calculatedTotalInvest)}
+        />
+
+        {/* AI Q&A */}
+        <div className="bg-gradient-to-br from-zinc-900 to-zinc-900/50 border border-zinc-800 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-9 h-9 bg-gradient-to-br from-amber-500/20 to-amber-500/5 border border-amber-500/30 rounded-xl flex items-center justify-center">
+              <Sparkles size={18} className="text-amber-400" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">AI質問応答</h3>
+              <p className="text-[10px] text-zinc-500">ダッシュボード全体の情報を元に回答</p>
+            </div>
+          </div>
+
+          <div className="mb-4 space-y-3 max-h-[400px] overflow-y-auto scrollbar-dark pr-1">
+            {aiQuestions.length === 0 && !isGeneratingAnswer && (
+              <div className="text-center py-6 text-xs text-zinc-500">
+                下のフォームから質問を入力してください
+              </div>
+            )}
+            {aiQuestions.map((item, idx) => (
+              <div key={idx} className="space-y-2">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <User size={14} className="text-white" />
+                  </div>
+                  <div className="flex-1 bg-zinc-800/60 border border-zinc-800 p-3 rounded-xl">
+                    <p className="text-sm text-zinc-200 whitespace-pre-wrap">{item.question}</p>
+                  </div>
+                </div>
+                {item.answer && (
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-7 h-7 bg-gradient-to-br from-amber-500 to-amber-600 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Bot size={14} className="text-white" />
+                    </div>
+                    <div className="flex-1 bg-zinc-800/60 border border-amber-500/20 p-3 rounded-xl">
+                      <p className="text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">{item.answer}</p>
+                    </div>
+                  </div>
+                )}
+                {!item.answer && isGeneratingAnswer && idx === aiQuestions.length - 1 && (
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-7 h-7 bg-gradient-to-br from-amber-500 to-amber-600 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Bot size={14} className="text-white" />
+                    </div>
+                    <div className="flex-1 bg-zinc-800/60 border border-zinc-800 p-3 rounded-xl">
+                      <div className="flex items-center gap-2 text-zinc-400">
+                        <div className="w-3 h-3 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-xs">回答生成中...</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <form onSubmit={handleAskQuestion} className="flex gap-2">
+            <input
+              type="text"
+              value={currentQuestion}
+              onChange={(e) => setCurrentQuestion(e.target.value)}
+              placeholder="例: 投資を増やしたほうがいいですか？"
+              className="flex-1 px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={isGeneratingAnswer}
+            />
+            <button
+              type="submit"
+              disabled={!currentQuestion.trim() || isGeneratingAnswer}
+              className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              <Send size={16} />
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
+  const renderSettings = () => {
+    const fields: { key: keyof FinancialConfig; label: string; help?: string }[] = [
+      { key: 'baseSalary', label: '基本給（手取り）', help: '月の給与手取り額' },
+      { key: 'nurseryFee', label: '保育料', help: '月額' },
+      { key: 'defaultCreditCard', label: 'カード支払（標準）', help: '月の平均的なカード支出' },
+      { key: 'pocketMoneyTarget', label: 'お小遣い目標上限' },
+      { key: 'childAllowance', label: '育児手当', help: '月額' },
+      { key: 'initialCash', label: '初期現金残高', help: '記録開始時の現金残高' },
+      { key: 'targetCash', label: '現金目標額', help: '生活防衛資金として確保したい額' },
+      { key: 'targetInvestmentBase', label: '投資基本額（月額）' },
+      { key: 'targetInvestmentAddon', label: '投資追加額（月額）', help: '育児手当などを上乗せ' },
+    ];
+
+    return (
+      <div className="space-y-5">
+        <div>
+          <h2 className="text-xl font-bold text-white">設定</h2>
+          <p className="text-xs text-zinc-500 mt-1">アプリの動作と財務パラメータ</p>
+        </div>
+
+        {/* Privacy */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+          <div className="text-xs font-medium text-zinc-500 mb-3 uppercase tracking-wide">プライバシー</div>
+          <button
+            onClick={() => setIsMasked(prev => !prev)}
+            className="w-full flex items-center justify-between py-2.5 hover:bg-zinc-800/50 -mx-2 px-2 rounded-lg transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              {isMasked ? <EyeOff size={18} className="text-zinc-400" /> : <Eye size={18} className="text-zinc-400" />}
+              <div className="text-left">
+                <div className="text-sm font-medium text-zinc-100">金額のマスキング</div>
+                <div className="text-xs text-zinc-500">他人に画面を見せるときに金額を隠す</div>
+              </div>
+            </div>
+            <div className={`w-11 h-6 rounded-full transition-colors relative ${isMasked ? 'bg-blue-600' : 'bg-zinc-700'}`}>
+              <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow ${isMasked ? 'translate-x-5' : 'translate-x-0.5'}`}></div>
+            </div>
+          </button>
+        </div>
+
+        {/* Financial Config */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+          <div className="text-xs font-medium text-zinc-500 mb-4 uppercase tracking-wide">財務パラメータ</div>
+          <div className="space-y-4">
+            {fields.map(f => (
+              <div key={f.key}>
+                <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+                  {f.label}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">¥</span>
+                  <input
+                    type="number"
+                    value={config[f.key]}
+                    onChange={(e) => handleConfigChange(f.key, e.target.value)}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg pl-8 pr-3 py-2.5 text-zinc-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-colors"
+                  />
+                </div>
+                {f.help && <p className="text-[10px] text-zinc-500 mt-1">{f.help}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="text-center text-xs text-zinc-600 py-4">
+          Life free · v0.2
+        </div>
+      </div>
+    );
+  };
+
+  const tabs: Array<{ id: Tab; label: string; icon: React.ComponentType<any> }> = [
+    { id: 'home', label: 'ホーム', icon: Home },
+    { id: 'records', label: '記録', icon: BookOpen },
+    { id: 'simulator', label: 'シミュ', icon: Calculator },
+    { id: 'analysis', label: '分析', icon: BarChart3 },
+    { id: 'settings', label: '設定', icon: Settings },
+  ];
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 pb-24">
+      {/* Top App Bar */}
+      <header className="sticky top-0 z-30 bg-zinc-950/80 backdrop-blur-lg border-b border-zinc-900">
+        <div className="max-w-2xl mx-auto px-5 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-emerald-500 rounded-lg flex items-center justify-center">
+              <span className="text-white font-extrabold text-xs">Lf</span>
+            </div>
+            <h1 className="font-bold text-base tracking-tight">Life free</h1>
+          </div>
+          <button
+            onClick={() => setIsMasked(prev => !prev)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 transition-colors"
+            title="金額マスキング切替"
+          >
+            {isMasked ? <EyeOff size={13} /> : <Eye size={13} />}
+            <span>{isMasked ? 'OFF' : 'ON'}</span>
+          </button>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
-        {activeTab === 'dashboard' ? (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                {/* Dashboard Content */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Cash Status */}
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden">
-                     <div className="absolute top-0 right-0 p-4 opacity-5">
-                        <Wallet size={100} />
-                     </div>
-                     <h2 className="text-sm font-medium text-slate-500 flex items-center gap-2 mb-2">
-                        <Wallet size={16} /> 現金残高 (目標 100万)
-                     </h2>
-                     <div className="text-3xl font-bold text-slate-900 mb-4">
-                        {formatYen(currentCash)}
-                     </div>
-                     <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-2">
-                        <div 
-                          className={`h-full rounded-full transition-all duration-1000 ${currentCash >= config.targetCash ? 'bg-green-500' : 'bg-blue-600'}`} 
-                          style={{width: `${Math.min((currentCash / config.targetCash) * 100, 100)}%`}}
-                        ></div>
-                     </div>
-                     <div className="flex justify-between text-xs font-medium">
-                        <span className="text-slate-400">
-                          {isMasked ? '達成率 ✳︎✳︎✳︎✳︎✳︎✳︎✳︎' : `達成率 ${Math.round((currentCash / config.targetCash) * 100)}%`}
-                        </span>
-                        {cashGap > 0 ? (
-                            <span className="text-blue-600">
-                              {isMasked
-                                ? 'あと ✳︎✳︎✳︎✳︎✳︎✳︎✳︎'
-                                : `あと ${formatYen(cashGap)} (${monthsToGoal > 0 ? `約${monthsToGoal}ヶ月` : '未定'})`}
-                            </span>
-                        ) : (
-                            <span className="text-green-600 flex items-center gap-1">目標達成! <PiggyBank size={12}/></span>
-                        )}
-                     </div>
-                  </div>
-        
-                  {/* Monthly Investment */}
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                     <h2 className="text-sm font-medium text-slate-500 flex items-center gap-2 mb-2">
-                        <TrendingUp size={16} /> 投資信託・資産
-                     </h2>
-                     <div className="flex items-baseline gap-2 mb-4">
-                        <div className="text-3xl font-bold text-slate-900">
-                           {formatYen(currentInvestTotal)}
-                        </div>
-                        <span className="text-xs text-slate-400 font-medium">総額 (評価額)</span>
-                     </div>
-                     
-                     <div className="border-t pt-3">
-                       <p className="text-xs text-slate-500 mb-2">今月の積立: {formatYen(latestHistory?.investmentTrust || 0)}</p>
-                       <div className="flex gap-2 text-xs">
-                          <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded border border-blue-100">
-                              基本: {formatYen(config.targetInvestmentBase)}
-                          </span>
-                          <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded border border-indigo-100">
-                              +育児: {formatYen(config.targetInvestmentAddon)}
-                          </span>
-                       </div>
-                     </div>
-                  </div>
-        
-                  {/* Strategy Phase */}
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                     <h2 className="text-sm font-medium text-slate-500 flex items-center gap-2 mb-3">
-                        <Target size={16} /> 現在の戦略
-                     </h2>
-                     {currentCash < config.targetCash ? (
-                         <div>
-                            <div className="text-lg font-bold text-amber-600 mb-1 flex items-center gap-2">
-                                現金優先フェーズ
-                            </div>
-                            <p className="text-sm text-slate-600 leading-relaxed">
-                                生活防衛資金が100万円に達するまで、副業収入と余剰資金はすべて現金としてプールしてください。
-                            </p>
-                         </div>
-                     ) : (
-                         <div>
-                            <div className="text-lg font-bold text-emerald-600 mb-1 flex items-center gap-2">
-                                投資最大化フェーズ
-                            </div>
-                            <p className="text-sm text-slate-600 leading-relaxed">
-                                現金目標を達成しました！余剰資金を積極的に投資信託へ回し、資産拡大を加速させましょう。
-                            </p>
-                         </div>
-                     )}
-                  </div>
-                </div>
-
-                {/* AI Q&A Section */}
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl shadow-sm border border-blue-200 p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Lightbulb size={20} className="text-amber-500" />
-                    <h2 className="text-lg font-bold text-slate-800">
-                      AI質問応答 - ダッシュボード全体の情報を元に回答します
-                    </h2>
-                  </div>
-
-                  {/* Chat History */}
-                  <div className="mb-4 space-y-4 max-h-[400px] overflow-y-auto">
-                    {aiQuestions.length === 0 && !isGeneratingAnswer && (
-                      <div className="text-center py-8 text-slate-500 text-sm">
-                        下のフォームから質問を入力してください。ダッシュボード全体の情報を元にAIが回答します。
-                      </div>
-                    )}
-                    {aiQuestions.map((item, idx) => (
-                      <div key={idx} className="space-y-3">
-                        {/* User Question */}
-                        <div className="flex items-start gap-3">
-                          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-                            <User size={16} className="text-white" />
-                          </div>
-                          <div className="flex-1 bg-white p-3 rounded-lg border border-blue-100 shadow-sm">
-                            <p className="text-sm text-slate-700 whitespace-pre-wrap">{item.question}</p>
-                          </div>
-                        </div>
-                        {/* AI Answer */}
-                        {item.answer && (
-                          <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center flex-shrink-0">
-                              <Bot size={16} className="text-white" />
-                            </div>
-                            <div className="flex-1 bg-white p-3 rounded-lg border border-amber-100 shadow-sm">
-                              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{item.answer}</p>
-                            </div>
-                          </div>
-                        )}
-                        {!item.answer && isGeneratingAnswer && idx === aiQuestions.length - 1 && (
-                          <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center flex-shrink-0">
-                              <Bot size={16} className="text-white" />
-                            </div>
-                            <div className="flex-1 bg-white p-3 rounded-lg border border-amber-100 shadow-sm">
-                              <div className="flex items-center gap-2 text-slate-500">
-                                <div className="w-4 h-4 border-2 border-slate-300 border-t-transparent rounded-full animate-spin"></div>
-                                <span className="text-sm">回答を生成中...</span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Question Input Form */}
-                  <form onSubmit={handleAskQuestion} className="flex gap-2">
-                    <input
-                      type="text"
-                      value={currentQuestion}
-                      onChange={(e) => setCurrentQuestion(e.target.value)}
-                      placeholder="例: 現金目標まであとどのくらいかかりますか？投資を増やしたほうがいいですか？"
-                      className="flex-1 px-4 py-2.5 bg-white border border-blue-200 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      disabled={isGeneratingAnswer}
-                    />
-                    <button
-                      type="submit"
-                      disabled={!currentQuestion.trim() || isGeneratingAnswer}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm"
-                    >
-                      <Send size={18} />
-                      送信
-                    </button>
-                  </form>
-                </div>
-
-                {/* Simulation Widget Card */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-slate-100 pb-4">
-                        <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                            <Coins className="text-amber-500" />
-                            将来の資産予測 (Total Assets Projection)
-                        </h2>
-                        
-                        <div className="flex flex-wrap items-center gap-4 text-sm bg-slate-50 p-2 rounded-lg border border-slate-200">
-                            <div className="flex items-center gap-2">
-                                <span className="text-slate-500 font-medium">想定年利</span>
-                                <div className="relative w-20">
-                                    <input 
-                                        type="number" 
-                                        value={simRateStr}
-                                        onChange={(e) => setSimRateStr(e.target.value)}
-                                        className="w-full pl-2 pr-6 py-1 bg-white text-slate-900 border border-slate-300 rounded-md font-bold focus:ring-2 focus:ring-blue-400 outline-none transition-colors"
-                                        placeholder="6.0"
-                                        step="0.1"
-                                    />
-                                    <span className="absolute right-2 top-1.5 text-slate-400 text-xs pointer-events-none">%</span>
-                                </div>
-                            </div>
-                            <div className="w-px h-4 bg-slate-300 hidden md:block"></div>
-                            <div className="flex items-center gap-2">
-                                <span className="text-slate-500 font-medium">今後の毎月積立</span>
-                                <div className="relative w-32">
-                                    <span className="absolute left-2 top-1.5 text-slate-400 text-xs pointer-events-none">¥</span>
-                                    <input 
-                                        type="number" 
-                                        value={isMasked ? 0 : simMonthlyInvestStr}
-                                        onChange={(e) => setSimMonthlyInvestStr(e.target.value)}
-                                        className="w-full pl-5 pr-2 py-1 bg-white text-slate-900 border border-slate-300 rounded-md font-bold focus:ring-2 focus:ring-blue-400 outline-none transition-colors"
-                                        placeholder={isMasked ? '✳︎✳︎✳︎✳︎✳︎✳︎✳︎' : '0'}
-                                        readOnly={isMasked}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                        {/* Milestones (Top or Left) */}
-                        <div className="lg:col-span-12 flex flex-wrap gap-4 mb-2">
-                             {[
-                                 { val: 1000, date: simulationResult.milestones.m1000, color: 'bg-teal-50 border-teal-200 text-teal-800' },
-                                 { val: 3000, date: simulationResult.milestones.m3000, color: 'bg-blue-50 border-blue-200 text-blue-800' },
-                                 { val: 5000, date: simulationResult.milestones.m5000, color: 'bg-indigo-50 border-indigo-200 text-indigo-800' }
-                             ].map((m) => (
-                                 <div key={m.val} className={`flex-1 min-w-[200px] border rounded-xl p-4 flex items-center justify-between ${m.color}`}>
-                                     <div>
-                                         <div className="text-xs font-semibold opacity-70 mb-1">
-                                           {isMasked ? '資産 ✳︎✳︎✳︎✳︎✳︎✳︎✳︎' : `資産 ${m.val}万円`}
-                                         </div>
-                                         <div className="text-xl font-bold">
-                                             {isMasked
-                                               ? '✳︎✳︎✳︎✳︎✳︎✳︎✳︎'
-                                               : (m.date ? `${m.date.getFullYear()}年` : '---')}
-                                             <span className="text-sm ml-1 font-normal">
-                                               {isMasked ? '' : (m.date ? `${m.date.getMonth() + 1}月` : '')}
-                                             </span>
-                                         </div>
-                                     </div>
-                                     {m.date ? <CalendarClock size={24} className="opacity-30" /> : <span className="text-xs opacity-50">未達</span>}
-                                 </div>
-                             ))}
-                        </div>
-
-                        {/* Annual List */}
-                        <div className="lg:col-span-12">
-                            <div className="max-h-[300px] overflow-y-auto border border-slate-200 rounded-xl scrollbar-thin scrollbar-thumb-slate-300">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="sticky top-0 bg-white shadow-sm z-10 text-slate-500">
-                                        <tr>
-                                            <th className="px-6 py-3 font-medium bg-slate-50">経過年数</th>
-                                            <th className="px-6 py-3 font-medium bg-slate-50">資産総額 (現金+投資)</th>
-                                            <th className="px-6 py-3 font-medium bg-slate-50 text-blue-600">うち投資元本</th>
-                                            <th className="px-6 py-3 font-medium bg-slate-50 text-amber-600">うち運用益</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100 bg-white">
-                                        {simulationResult.yearlyData.map((row) => (
-                                            <tr key={row.month} className="hover:bg-slate-50">
-                                                <td className="px-6 py-3 text-slate-600 font-medium">
-                                                    {row.yearIndex}年後 <span className="text-xs text-slate-400 ml-1">({row.displayYear})</span>
-                                                </td>
-                                                <td className="px-6 py-3 font-bold text-slate-900 text-base">
-                                                    {formatYenMan(row.total / 10000)}
-                                                </td>
-                                                <td className="px-6 py-3 text-slate-600">
-                                                    {formatYenMan(row.investPrincipal / 10000)}
-                                                </td>
-                                                <td className="px-6 py-3 text-amber-600 font-medium">
-                                                    {isMasked ? '✳︎✳︎✳︎✳︎✳︎✳︎✳︎' : `+${formatYenMan(row.investProfit / 10000)}`}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-        
-                {/* Charts */}
-                <AnalysisChart 
-                    data={sortedRecords} 
-                    config={config} 
-                    accumulatedCash={historyData.map(h => h.calculatedTotalCash)} 
-                    accumulatedInvest={historyData.map(h => h.calculatedTotalInvest)}
-                />
-        
-                {/* Recent Transactions List */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                    <h3 className="font-semibold text-slate-700">月次レポート</h3>
-                    <button 
-                        onClick={handleAddNew}
-                        className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-sm"
-                    >
-                        <Plus size={16} />
-                        記録を追加
-                    </button>
-                  </div>
-                  
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-50 text-slate-500 font-medium">
-                            <tr>
-                                <th className="px-6 py-3 w-28">年月</th>
-                                <th className="px-6 py-3">収入計</th>
-                                <th className="px-6 py-3">支出計</th>
-                                <th className="px-6 py-3 text-blue-600">投資(積立)</th>
-                                <th className="px-6 py-3">現金増減</th>
-                                <th className="px-6 py-3 bg-slate-50 border-l border-slate-200 text-slate-700">現金残高</th>
-                                <th className="px-6 py-3 bg-slate-50 text-slate-700">投資残高</th>
-                                <th className="px-6 py-3 w-32"></th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {historyData.slice().reverse().map((record) => {
-                                const income = record.salaryIncome + record.sideHustleIncome + record.childAllowanceIncome;
-                                const expense = record.nurseryExpense + record.creditCardExpense + record.pocketMoneyExpense;
-                                const flow = record.calculatedCashFlow || 0;
-                                
-                                return (
-                                    <tr key={record.id} className="hover:bg-slate-50 transition-colors group">
-                                        <td className="px-6 py-4 font-medium text-slate-900">{record.id}</td>
-                                        <td className="px-6 py-4 text-slate-600">{formatYen(income)}</td>
-                                        <td className="px-6 py-4 text-slate-600">{formatYen(expense)}</td>
-                                        <td className="px-6 py-4 font-medium text-blue-600">{formatYen(record.investmentTrust)}</td>
-                                        <td className="px-6 py-4">
-                                                <span className={`px-2 py-1 rounded text-xs font-semibold ${flow >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                  {isMasked ? '✳︎✳︎✳︎✳︎✳︎✳︎✳︎' : `${flow > 0 ? '+' : ''}${flow.toLocaleString()}`}
-                                                </span>
-                                        </td>
-                                        <td className="px-6 py-4 bg-slate-50/50 font-medium text-slate-900 border-l border-slate-100">
-                                            {formatYen(record.calculatedTotalCash)}
-                                        </td>
-                                        <td className="px-6 py-4 bg-slate-50/50 font-medium text-slate-900">
-                                            {formatYen(record.calculatedTotalInvest)}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <button 
-                                                    onClick={() => handleEdit(record)}
-                                                    className="text-slate-400 hover:text-blue-600 p-1 opacity-0 group-hover:opacity-100 transition-all"
-                                                >
-                                                    編集
-                                                </button>
-                                                <button 
-                                                    onClick={() => handleDelete(record)}
-                                                    className="text-slate-400 hover:text-red-600 p-1 opacity-0 group-hover:opacity-100 transition-all"
-                                                    title="削除"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                            {historyData.length === 0 && (
-                                <tr>
-                                    <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
-                                        まだ記録がありません。「記録を追加」から始めましょう。
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                  </div>
-                </div>
+      {/* Main Content */}
+      <main className="max-w-2xl mx-auto px-5 py-5">
+        {activeTab === 'home' && renderHome()}
+        {activeTab === 'records' && renderRecords()}
+        {activeTab === 'simulator' && (
+          <div className="space-y-2">
+            <div className="mb-3">
+              <h2 className="text-xl font-bold text-white">シミュレーター</h2>
+              <p className="text-xs text-zinc-500 mt-1">将来の資産推移を予測</p>
             </div>
-        ) : (
-            <Simulator 
-                initialCash={currentCash} 
-                initialInvest={currentInvestTotal} 
-                initialMonthlyInvest={simMonthlyInvest} 
-                sharedRate={simRate}
-                onSharedChange={(rate, invest) => {
-                    setSimRateStr(rate.toString());
-                    setSimMonthlyInvestStr(invest.toString());
-                }}
-                isMasked={isMasked}
+            <Simulator
+              initialCash={currentCash}
+              initialInvest={currentInvestTotal}
+              initialMonthlyInvest={simMonthlyInvest}
+              sharedRate={simRate}
+              onSharedChange={(rate, invest) => {
+                setSimRateStr(rate.toString());
+                setSimMonthlyInvestStr(invest.toString());
+              }}
+              isMasked={isMasked}
             />
+          </div>
         )}
+        {activeTab === 'analysis' && renderAnalysis()}
+        {activeTab === 'settings' && renderSettings()}
       </main>
+
+      {/* Floating Add Button (Home only) */}
+      {activeTab === 'home' && historyData.length > 0 && (
+        <button
+          onClick={handleAddNew}
+          className="fixed bottom-24 right-5 z-20 w-14 h-14 bg-blue-600 hover:bg-blue-500 text-white rounded-full shadow-2xl shadow-blue-900/50 flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+          aria-label="記録を追加"
+        >
+          <Plus size={24} />
+        </button>
+      )}
+
+      {/* Bottom Tab Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 z-30 bg-zinc-950/95 backdrop-blur-lg border-t border-zinc-900">
+        <div className="max-w-2xl mx-auto grid grid-cols-5 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          {tabs.map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex flex-col items-center gap-1 py-2 px-1 rounded-xl transition-colors ${
+                  isActive ? 'text-blue-400' : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                <Icon size={20} strokeWidth={isActive ? 2.4 : 2} />
+                <span className={`text-[10px] ${isActive ? 'font-semibold' : 'font-medium'}`}>
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
       {/* Editor Modal */}
       {isEditorOpen && (
-        <MonthEditor 
-            key={`${editingRecord?.id || 'new'}-${isEditorOpen}`} // keyを追加して、editingRecordが変更されたときに強制的に再マウント
-            config={config} 
-            initialData={editingRecord}
-            previousRecord={getPreviousRecord(editingRecord?.id)}
-            onSave={handleSaveRecord} 
-            onCancel={() => {
-              // キャンセル時は状態を確実にリセット
-              setIsEditorOpen(false);
-              setEditingRecord(undefined);
-              setIsSaving(false);
-            }}
-            currentTotalCash={currentCash}
-            isSaving={isSaving}
+        <MonthEditor
+          key={`${editingRecord?.id || 'new'}-${isEditorOpen}`}
+          config={config}
+          initialData={editingRecord}
+          previousRecord={getPreviousRecord(editingRecord?.id)}
+          onSave={handleSaveRecord}
+          onCancel={() => {
+            setIsEditorOpen(false);
+            setEditingRecord(undefined);
+            setIsSaving(false);
+          }}
+          currentTotalCash={currentCash}
+          isSaving={isSaving}
         />
       )}
     </div>
