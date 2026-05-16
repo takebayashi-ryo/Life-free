@@ -504,50 +504,58 @@ function App() {
             </button>
           </div>
         ) : (
-          <div className={`${cardClass} overflow-hidden`}>
-            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {historyData.slice().reverse().map((record, idx) => {
-                const income = record.salaryIncome + record.sideHustleIncome + record.childAllowanceIncome;
-                const expense = record.nurseryExpense + record.creditCardExpense + record.pocketMoneyExpense;
-                const flow = record.calculatedCashFlow || 0;
+          <div className="space-y-3">
+            {historyData.slice().reverse().map((record, idx) => {
+              const income = record.salaryIncome + record.sideHustleIncome + record.childAllowanceIncome;
+              const expense = record.nurseryExpense + record.creditCardExpense + record.pocketMoneyExpense;
+              const flow = record.calculatedCashFlow || 0;
 
-                const recordIdx = historyData.findIndex(h => h.id === record.id);
-                const prevRecord = recordIdx > 0 ? historyData[recordIdx - 1] : null;
-                const prevTotal = prevRecord
-                  ? prevRecord.calculatedTotalCash + prevRecord.calculatedTotalInvest
-                  : null;
-                const currTotal = record.calculatedTotalCash + record.calculatedTotalInvest;
-                const diff = prevTotal !== null ? currTotal - prevTotal : null;
+              const recordIdx = historyData.findIndex(h => h.id === record.id);
+              const prevRecord = recordIdx > 0 ? historyData[recordIdx - 1] : null;
+              const prevTotal = prevRecord
+                ? prevRecord.calculatedTotalCash + prevRecord.calculatedTotalInvest
+                : null;
+              const currTotal = record.calculatedTotalCash + record.calculatedTotalInvest;
+              const diff = prevTotal !== null ? currTotal - prevTotal : null;
+              const [yearStr, monthStr] = record.id.split('-');
 
-                return (
-                  <div key={record.id} className="px-5 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div className={`text-base font-bold ${primaryText}`}>{record.id}</div>
-                        {diff !== null && !isMasked && (
-                          <div className={`text-xs mt-0.5 ${diff >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                            {diff > 0 ? '+' : ''}{diff.toLocaleString()} <span className={subtleText}>先月比</span>
-                          </div>
-                        )}
+              return (
+                <div key={record.id} className={`${cardClass} overflow-hidden`}>
+                  {/* Header band */}
+                  <div className="px-5 pt-4 pb-3 flex items-start justify-between border-b border-zinc-100 dark:border-zinc-800/70 bg-zinc-50/60 dark:bg-zinc-900/40">
+                    <div>
+                      <div className={`text-lg font-bold tracking-tight ${primaryText} leading-none`}>
+                        {Number(monthStr)}<span className="text-sm font-medium">月</span>
+                        <span className={`ml-1.5 text-xs font-medium ${subtleText}`}>{yearStr}</span>
                       </div>
-                      <div className="flex items-center gap-0.5">
-                        <button
-                          onClick={() => handleEdit(record)}
-                          className="p-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-                          title="編集"
-                        >
-                          <Edit3 size={15} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(record)}
-                          className="p-2 text-zinc-400 hover:text-rose-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-                          title="削除"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
+                      {diff !== null && !isMasked ? (
+                        <div className={`text-xs mt-1.5 font-semibold ${diff >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                          {diff > 0 ? '+' : ''}{diff.toLocaleString()} <span className={`${subtleText} font-normal`}>先月比</span>
+                        </div>
+                      ) : (
+                        <div className={`text-xs mt-1.5 ${subtleText}`}>初回記録</div>
+                      )}
                     </div>
+                    <div className="flex items-center gap-0.5 -mr-1">
+                      <button
+                        onClick={() => handleEdit(record)}
+                        className="p-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                        title="編集"
+                      >
+                        <Edit3 size={15} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(record)}
+                        className="p-2 text-zinc-400 hover:text-rose-500 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                        title="削除"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
 
+                  {/* Body */}
+                  <div className="px-5 py-4">
                     <div className="grid grid-cols-4 gap-3 text-xs">
                       <div>
                         <div className={`${subtleText} mb-0.5`}>収入</div>
@@ -568,18 +576,19 @@ function App() {
                         </div>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/60 text-xs">
-                      <span className={subtleText}>月末残高</span>
-                      <div className={`flex gap-3 ${primaryText}`}>
-                        <span>現金 <span className="font-semibold">{formatYen(record.calculatedTotalCash)}</span></span>
-                        <span>投資 <span className="font-semibold">{formatYen(record.calculatedTotalInvest)}</span></span>
-                      </div>
+                  {/* Footer balance */}
+                  <div className="px-5 py-3 bg-zinc-50/60 dark:bg-zinc-900/40 border-t border-zinc-100 dark:border-zinc-800/70 flex items-center justify-between text-xs">
+                    <span className={subtleText}>月末残高</span>
+                    <div className={`flex gap-3 ${primaryText}`}>
+                      <span>現金 <span className="font-semibold">{formatYen(record.calculatedTotalCash)}</span></span>
+                      <span>投資 <span className="font-semibold">{formatYen(record.calculatedTotalInvest)}</span></span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
