@@ -30,6 +30,7 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data, config, accumulated
     ...record,
     cashBalance: accumulatedCash[index],
     investBalance: accumulatedInvest[index],
+    totalBalance: accumulatedCash[index] + accumulatedInvest[index],
   }));
 
   const sortedData = [...chartData].sort((a, b) => a.id.localeCompare(b.id));
@@ -44,6 +45,7 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data, config, accumulated
     bar: isDark ? '#52525b' : '#a1a1aa',
     cash: '#10b981',
     invest: isDark ? '#60a5fa' : '#3b82f6',
+    total: isDark ? '#f4f4f5' : '#18181b',
     target: '#ef4444',
   };
 
@@ -88,6 +90,7 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data, config, accumulated
                 if (name === 'investmentTrust') return [`¥${value.toLocaleString()}`, '月次投資'];
                 if (name === 'cashBalance') return [`¥${value.toLocaleString()}`, '現金残高'];
                 if (name === 'investBalance') return [`¥${value.toLocaleString()}`, '投資評価額'];
+                if (name === 'totalBalance') return [`¥${value.toLocaleString()}`, '総資産'];
                 return [`¥${value.toLocaleString()}`, name];
               }}
               contentStyle={{
@@ -104,6 +107,7 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data, config, accumulated
                 if (value === 'investmentTrust') return '月次投資';
                 if (value === 'cashBalance') return '現金残高';
                 if (value === 'investBalance') return '投資評価額';
+                if (value === 'totalBalance') return '総資産';
                 return value;
               }}
             />
@@ -113,6 +117,7 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data, config, accumulated
             <Bar yAxisId="left" dataKey="investmentTrust" name="investmentTrust" barSize={14} fill={colors.bar} opacity={0.6} radius={[3, 3, 0, 0]} />
             <Line yAxisId="right" type="monotone" dataKey="cashBalance" name="cashBalance" stroke={colors.cash} strokeWidth={2} dot={{ r: 3, fill: colors.cash }} activeDot={{ r: 5 }} />
             <Line yAxisId="right" type="monotone" dataKey="investBalance" name="investBalance" stroke={colors.invest} strokeWidth={2} dot={{ r: 3, fill: colors.invest }} activeDot={{ r: 5 }} />
+            <Line yAxisId="right" type="monotone" dataKey="totalBalance" name="totalBalance" stroke={colors.total} strokeWidth={2.5} dot={{ r: 3.5, fill: colors.total }} activeDot={{ r: 6 }} />
           </ComposedChart>
         </ResponsiveContainer>
       )}

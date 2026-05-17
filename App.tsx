@@ -782,7 +782,7 @@ function App() {
   const tabs: Array<{ id: Tab; label: string; icon: React.ComponentType<any> }> = [
     { id: 'home', label: 'ホーム', icon: Home },
     { id: 'records', label: '記録', icon: BookOpen },
-    { id: 'simulator', label: 'シミュ', icon: Calculator },
+    { id: 'simulator', label: '予測', icon: Calculator },
     { id: 'analysis', label: '分析', icon: BarChart3 },
     { id: 'settings', label: '設定', icon: Settings },
   ];
@@ -791,8 +791,7 @@ function App() {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 pb-24 transition-colors">
       {/* Top App Bar */}
       <header className="sticky top-0 z-30 bg-zinc-50/90 dark:bg-zinc-950/90 backdrop-blur-lg border-b border-zinc-200 dark:border-zinc-900">
-        <div className="max-w-2xl mx-auto px-5 h-14 flex items-center justify-between">
-          <h1 className="font-bold text-base tracking-tight">Life free</h1>
+        <div className="max-w-2xl mx-auto px-5 h-14 flex items-center justify-end">
           <button
             onClick={() => setIsMasked(prev => !prev)}
             className={`p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors ${subtleText}`}
