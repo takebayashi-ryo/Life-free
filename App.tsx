@@ -3,7 +3,7 @@ import {
   Plus, Settings, Wallet, Target, Calculator,
   Trash2, Send, User, Bot, Eye, EyeOff,
   Home, BookOpen, BarChart3, ChevronRight, Edit3, PiggyBank,
-  Copy, TrendingUp, TrendingDown, Sun, Moon, Smartphone
+  Copy, TrendingUp, TrendingDown, Sun, Moon, Smartphone, Download
 } from 'lucide-react';
 import { MonthlyRecord, FinancialConfig, DEFAULT_CONFIG } from './types';
 import AnalysisChart from './components/AnalysisChart';
@@ -240,6 +240,46 @@ function App() {
     setEditingRecord(undefined);
     setPrefillRecord(latest);
     setIsEditorOpen(true);
+  };
+
+  const handleExportRecord = (record: typeof historyData[number]) => {
+    const escape = (val: any): string => {
+      const s = val === null || val === undefined ? '' : String(val);
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+
+    const rows: Array<[string, string | number]> = [
+      ['項目', '金額'],
+      ['対象月', record.id],
+      ['給与収入', record.salaryIncome],
+      ['副業収入', record.sideHustleIncome],
+      ['育児手当', record.childAllowanceIncome],
+      ['保育料', record.nurseryExpense],
+      ['カード支払', record.creditCardExpense],
+      ['お小遣い', record.pocketMoneyExpense],
+      ['投資購入額', record.investmentTrust],
+      ['月末現金残高', record.calculatedTotalCash],
+      ['月末投資評価額', record.calculatedTotalInvest],
+      ['現金増減', record.calculatedCashFlow ?? 0],
+      ['総資産', record.calculatedTotalCash + record.calculatedTotalInvest],
+      ['メモ', record.note || ''],
+    ];
+
+    const csv = rows.map(row => row.map(escape).join(',')).join('\r\n');
+
+    // BOM for Excel UTF-8 compatibility
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `lifefree_${record.id}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const getPreviousRecord = (targetId?: string) => {
@@ -537,6 +577,14 @@ function App() {
                       )}
                     </div>
                     <div className="flex items-center gap-0.5 -mr-1">
+                      <button
+                        onClick={() => handleExportRecord(record)}
+                        className="p-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                        title="この月のデータをCSVでダウンロード"
+                        aria-label="CSVダウンロード"
+                      >
+                        <Download size={15} />
+                      </button>
                       <button
                         onClick={() => handleEdit(record)}
                         className="p-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 rounded-lg transition-colors"
