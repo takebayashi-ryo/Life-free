@@ -242,15 +242,7 @@ function App() {
     setIsEditorOpen(true);
   };
 
-  const handleExportCSV = () => {
-    if (historyData.length === 0) return;
-
-    const headers = [
-      '対象月', '給与収入', '副業収入', '育児手当', '保育料',
-      'カード支払', 'お小遣い', '投資購入額', '月末現金残高',
-      '月末投資評価額', '現金増減', '総資産', 'メモ'
-    ];
-
+  const handleExportRecord = (record: typeof historyData[number]) => {
     const escape = (val: any): string => {
       const s = val === null || val === undefined ? '' : String(val);
       if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
@@ -259,32 +251,31 @@ function App() {
       return s;
     };
 
-    const rows = historyData.map(r => [
-      r.id,
-      r.salaryIncome,
-      r.sideHustleIncome,
-      r.childAllowanceIncome,
-      r.nurseryExpense,
-      r.creditCardExpense,
-      r.pocketMoneyExpense,
-      r.investmentTrust,
-      r.calculatedTotalCash,
-      r.calculatedTotalInvest,
-      r.calculatedCashFlow ?? 0,
-      r.calculatedTotalCash + r.calculatedTotalInvest,
-      r.note || ''
-    ]);
+    const rows: Array<[string, string | number]> = [
+      ['項目', '金額'],
+      ['対象月', record.id],
+      ['給与収入', record.salaryIncome],
+      ['副業収入', record.sideHustleIncome],
+      ['育児手当', record.childAllowanceIncome],
+      ['保育料', record.nurseryExpense],
+      ['カード支払', record.creditCardExpense],
+      ['お小遣い', record.pocketMoneyExpense],
+      ['投資購入額', record.investmentTrust],
+      ['月末現金残高', record.calculatedTotalCash],
+      ['月末投資評価額', record.calculatedTotalInvest],
+      ['現金増減', record.calculatedCashFlow ?? 0],
+      ['総資産', record.calculatedTotalCash + record.calculatedTotalInvest],
+      ['メモ', record.note || ''],
+    ];
 
-    const csv = [headers, ...rows]
-      .map(row => row.map(escape).join(','))
-      .join('\r\n');
+    const csv = rows.map(row => row.map(escape).join(',')).join('\r\n');
 
     // BOM for Excel UTF-8 compatibility
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `lifefree_records_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `lifefree_${record.id}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -520,24 +511,14 @@ function App() {
           </div>
           <div className="flex gap-2">
             {sortedRecords.length > 0 && (
-              <>
-                <button
-                  onClick={handleExportCSV}
-                  className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 text-sm p-2 rounded-xl font-medium transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800"
-                  title="全記録をCSVでダウンロード"
-                  aria-label="CSVダウンロード"
-                >
-                  <Download size={16} />
-                </button>
-                <button
-                  onClick={handleAddFromPrevious}
-                  className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 text-sm px-3 py-2 rounded-xl font-medium transition-colors flex items-center gap-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-                  title="前月のデータをコピーして新規作成"
-                >
-                  <Copy size={14} />
-                  前月から
-                </button>
-              </>
+              <button
+                onClick={handleAddFromPrevious}
+                className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 text-sm px-3 py-2 rounded-xl font-medium transition-colors flex items-center gap-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                title="前月のデータをコピーして新規作成"
+              >
+                <Copy size={14} />
+                前月から
+              </button>
             )}
             <button
               onClick={handleAddNew}
@@ -596,6 +577,14 @@ function App() {
                       )}
                     </div>
                     <div className="flex items-center gap-0.5 -mr-1">
+                      <button
+                        onClick={() => handleExportRecord(record)}
+                        className="p-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                        title="この月のデータをCSVでダウンロード"
+                        aria-label="CSVダウンロード"
+                      >
+                        <Download size={15} />
+                      </button>
                       <button
                         onClick={() => handleEdit(record)}
                         className="p-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 rounded-lg transition-colors"
