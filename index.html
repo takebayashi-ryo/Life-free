@@ -3,14 +3,40 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AssetFlow - Smart Finance Tracker</title>
+    <title>Life free - Smart Finance Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+      }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
+      :root { color-scheme: light dark; }
       body {
         font-family: 'Inter', sans-serif;
-        background-color: #f8fafc;
+        background-color: #fafafa;
+        color: #18181b;
+        transition: background-color 0.2s, color 0.2s;
       }
+      html.dark body {
+        background-color: #0a0a0a;
+        color: #f4f4f5;
+      }
+      /* Hide scrollbar for chrome */
+      .scrollbar-hide::-webkit-scrollbar { display: none; }
+      .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+      /* Custom scrollbar */
+      .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+      .scrollbar-thin::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 3px; }
+      html.dark .scrollbar-thin::-webkit-scrollbar-thumb { background: #3f3f46; }
+      .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+      input[type=number]::-webkit-inner-spin-button,
+      input[type=number]::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      input[type=number] { -moz-appearance: textfield; }
     </style>
   <script type="importmap">
 {
