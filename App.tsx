@@ -336,8 +336,9 @@ function App() {
 
   // ===== Sub Renderers =====
   const renderHome = () => {
-    const cashProgress = Math.min((currentCash / config.targetCash) * 100, 100);
+    const cashProgress = isLoadingRecords ? 0 : Math.min((currentCash / config.targetCash) * 100, 100);
     const recentRecords = historyData.slice(-3).reverse();
+    const loadingDash = '¥—';
 
     return (
       <div className="space-y-4">
@@ -348,11 +349,11 @@ function App() {
             <Wallet size={18} className="text-zinc-500" />
           </div>
           <div className="text-[40px] leading-none font-bold tracking-tight mb-4">
-            {formatYen(totalAssets)}
+            {isLoadingRecords ? <span className="text-zinc-600">{loadingDash}</span> : formatYen(totalAssets)}
           </div>
 
           {/* Month over month */}
-          {monthOverMonthDiff !== null && !isMasked && (
+          {!isLoadingRecords && monthOverMonthDiff !== null && !isMasked && (
             <div className="flex items-center gap-1.5 mb-5 text-sm">
               {monthOverMonthDiff >= 0 ? (
                 <TrendingUp size={14} className="text-emerald-400" />
@@ -370,16 +371,20 @@ function App() {
               <span className="text-xs text-zinc-500 ml-1">先月比</span>
             </div>
           )}
-          {monthOverMonthDiff === null && <div className="mb-5"></div>}
+          {(isLoadingRecords || monthOverMonthDiff === null) && <div className="mb-5"></div>}
 
           <div className="grid grid-cols-2 gap-4 pt-4 border-t border-zinc-800">
             <div>
               <div className="text-xs text-zinc-500 mb-1">現金残高</div>
-              <div className="text-base font-semibold">{formatYen(currentCash)}</div>
+              <div className="text-base font-semibold">
+                {isLoadingRecords ? <span className="text-zinc-600">{loadingDash}</span> : formatYen(currentCash)}
+              </div>
             </div>
             <div className="text-right">
               <div className="text-xs text-zinc-500 mb-1">投資評価額</div>
-              <div className="text-base font-semibold">{formatYen(currentInvestTotal)}</div>
+              <div className="text-base font-semibold">
+                {isLoadingRecords ? <span className="text-zinc-600">{loadingDash}</span> : formatYen(currentInvestTotal)}
+              </div>
             </div>
           </div>
         </div>
@@ -393,17 +398,19 @@ function App() {
               <span className={`text-xs ${subtleText}`}>¥{(config.targetCash / 10000).toFixed(0)}万</span>
             </div>
             <span className={`text-xs ${subtleText}`}>
-              {isMasked ? MASK : `${Math.round(cashProgress)}%`}
+              {isLoadingRecords ? '—' : isMasked ? MASK : `${Math.round(cashProgress)}%`}
             </span>
           </div>
           <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden mb-2">
             <div
-              className={`h-full rounded-full transition-all duration-700 ${currentCash >= config.targetCash ? 'bg-emerald-500' : 'bg-zinc-900 dark:bg-zinc-100'}`}
+              className={`h-full rounded-full transition-all duration-700 ${currentCash >= config.targetCash && !isLoadingRecords ? 'bg-emerald-500' : 'bg-zinc-900 dark:bg-zinc-100'}`}
               style={{ width: `${cashProgress}%` }}
             ></div>
           </div>
           <div className="text-xs">
-            {cashGap > 0 ? (
+            {isLoadingRecords ? (
+              <span className={subtleText}>読み込み中…</span>
+            ) : cashGap > 0 ? (
               <span className={subtleText}>
                 {isMasked ? `あと ${MASK}` : `あと ${formatYen(cashGap)}`}
                 {!isMasked && monthsToGoal > 0 && ` · 約${monthsToGoal}ヶ月`}
@@ -481,7 +488,12 @@ function App() {
             <Target size={14} className={subtleText} />
             <span className={`text-xs ${subtleText}`}>現在の戦略</span>
           </div>
-          {currentCash < config.targetCash ? (
+          {isLoadingRecords ? (
+            <>
+              <div className={`text-base font-bold ${primaryText} mb-1`}>—</div>
+              <p className={`text-sm ${subtleText} leading-relaxed`}>読み込み中…</p>
+            </>
+          ) : currentCash < config.targetCash ? (
             <>
               <div className={`text-base font-bold ${primaryText} mb-1`}>現金優先フェーズ</div>
               <p className={`text-sm ${subtleText} leading-relaxed`}>
