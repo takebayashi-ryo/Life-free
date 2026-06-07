@@ -3,12 +3,54 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine
 } from 'recharts';
-import { Calculator, Target, TrendingUp, AlertCircle, Wallet, Save, Trash2, Bookmark, ChevronRight, X, Plus, Baby } from 'lucide-react';
-import { SimulationCase } from '../types';
+import { Calculator, Target, TrendingUp, AlertCircle, Wallet, Save, Trash2, Bookmark, ChevronRight, X, Plus, Baby, Sparkles } from 'lucide-react';
+import { SimulationCase, UserProfile } from '../types';
 import { calculateSimulation, SimulationPhase } from '../services/simulationService';
 
 const STORAGE_KEY_PHASES = 'lifefree_sim_phases_v1';
 const STORAGE_KEY_USE_PHASES = 'lifefree_sim_use_phases_v1';
+
+const CHILD_STAGES: Array<{ label: string; startAge: number; endAge: number; suggestedMonthly: number }> = [
+  { label: '保育園期',  startAge: 0,  endAge: 5,  suggestedMonthly: 80000 },
+  { label: '小学生期',  startAge: 6,  endAge: 12, suggestedMonthly: 120000 },
+  { label: '中学生期',  startAge: 13, endAge: 15, suggestedMonthly: 100000 },
+  { label: '高校生期',  startAge: 16, endAge: 18, suggestedMonthly: 80000 },
+  { label: '大学生期',  startAge: 19, endAge: 22, suggestedMonthly: 30000 },
+];
+const POST_INDEPENDENCE = { label: '独立後', suggestedMonthly: 150000 };
+
+const generatePhasesFromProfile = (profile: UserProfile): SimulationPhase[] => {
+  if (!profile.children || profile.children.length === 0) return [];
+
+  const currentYear = new Date().getFullYear();
+  // Youngest child's age determines the longest dependency horizon
+  const youngestAge = Math.min(
+    ...profile.children.map(c => currentYear - c.birthYear)
+  );
+
+  const phases: SimulationPhase[] = [];
+
+  CHILD_STAGES.forEach((stage, idx) => {
+    if (youngestAge > stage.endAge) return;
+    const startYearOffset = Math.max(0, stage.startAge - youngestAge);
+    phases.push({
+      id: `auto-${idx}`,
+      startYearOffset,
+      monthlyInvest: stage.suggestedMonthly,
+      label: stage.label,
+    });
+  });
+
+  const independenceOffset = Math.max(0, 23 - youngestAge);
+  phases.push({
+    id: 'auto-independent',
+    startYearOffset: independenceOffset,
+    monthlyInvest: POST_INDEPENDENCE.suggestedMonthly,
+    label: POST_INDEPENDENCE.label,
+  });
+
+  return phases;
+};
 
 interface SimulatorProps {
   initialCash: number;
@@ -17,6 +59,7 @@ interface SimulatorProps {
   sharedRate?: number;
   onSharedChange?: (rate: number, monthlyInvest: number) => void;
   isMasked?: boolean;
+  profile?: UserProfile;
 }
 
 const STORAGE_KEY_CASES = 'assetflow_sim_cases_v1';
@@ -35,7 +78,7 @@ function useIsDark() {
 }
 
 const Simulator: React.FC<SimulatorProps> = ({
-  initialCash, initialInvest, initialMonthlyInvest, sharedRate, onSharedChange, isMasked = false,
+  initialCash, initialInvest, initialMonthlyInvest, sharedRate, onSharedChange, isMasked = false, profile,
 }) => {
   const isDark = useIsDark();
 
@@ -98,6 +141,15 @@ const Simulator: React.FC<SimulatorProps> = ({
   const handleRemovePhase = (id: string) => {
     setPhases(prev => prev.filter(p => p.id !== id));
   };
+
+  const handleGenerateFromProfile = () => {
+    if (!profile) return;
+    const generated = generatePhasesFromProfile(profile);
+    if (generated.length === 0) return;
+    setPhases(generated);
+  };
+
+  const profileHasChildren = profile && profile.children && profile.children.length > 0;
 
   useEffect(() => {
     if (sharedRate !== undefined && Number(params.annualRate) !== sharedRate) {
@@ -332,14 +384,31 @@ const Simulator: React.FC<SimulatorProps> = ({
               <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-800">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">フェーズ別積立額</span>
-                  <button
-                    type="button"
-                    onClick={handleAddPhase}
-                    className="text-[10px] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center gap-0.5"
-                  >
-                    <Plus size={11} /> 追加
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {profileHasChildren && (
+                      <button
+                        type="button"
+                        onClick={handleGenerateFromProfile}
+                        className="text-[10px] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center gap-0.5"
+                        title="プロフィールの子供情報からフェーズを自動生成"
+                      >
+                        <Sparkles size={11} /> プロフィールから生成
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleAddPhase}
+                      className="text-[10px] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center gap-0.5"
+                    >
+                      <Plus size={11} /> 追加
+                    </button>
+                  </div>
                 </div>
+                {!profileHasChildren && (
+                  <p className="text-[10px] text-zinc-500 mb-2 bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1.5">
+                    💡 設定タブで子供を登録すると、年齢から自動でフェーズを生成できます
+                  </p>
+                )}
                 <div className="space-y-1.5">
                   {[...phases].sort((a, b) => a.startYearOffset - b.startYearOffset).map(phase => (
                     <div key={phase.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 flex items-center gap-1.5">

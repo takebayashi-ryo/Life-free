@@ -5,7 +5,7 @@ import {
   Home, BookOpen, BarChart3, ChevronRight, Edit3, PiggyBank,
   Copy, TrendingUp, TrendingDown, Sun, Moon, Smartphone, Download
 } from 'lucide-react';
-import { MonthlyRecord, FinancialConfig, DEFAULT_CONFIG } from './types';
+import { MonthlyRecord, FinancialConfig, DEFAULT_CONFIG, UserProfile, DEFAULT_PROFILE, ChildProfile } from './types';
 import AnalysisChart from './components/AnalysisChart';
 import MonthEditor from './components/MonthEditor';
 import Simulator from './components/Simulator';
@@ -15,6 +15,7 @@ import { generateDashboardAnswer } from './services/geminiService';
 
 const STORAGE_KEY_CONFIG = 'assetflow_config_v1';
 const STORAGE_KEY_THEME = 'lifefree_theme_v1';
+const STORAGE_KEY_PROFILE = 'lifefree_profile_v1';
 
 type Tab = 'home' | 'records' | 'simulator' | 'analysis' | 'settings';
 type ThemeMode = 'light' | 'dark' | 'auto';
@@ -37,6 +38,7 @@ function applyTheme(mode: ThemeMode) {
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [config, setConfig] = useState<FinancialConfig>(DEFAULT_CONFIG);
+  const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
   const [records, setRecords] = useState<MonthlyRecord[]>([]);
   const [isLoadingRecords, setIsLoadingRecords] = useState(true);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -83,6 +85,11 @@ function App() {
     if (savedConfig) {
       setConfig(JSON.parse(savedConfig));
     }
+
+    const savedProfile = localStorage.getItem(STORAGE_KEY_PROFILE);
+    if (savedProfile) {
+      setProfile(JSON.parse(savedProfile));
+    }
   }, []);
 
   useEffect(() => {
@@ -96,6 +103,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(config));
   }, [config]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(profile));
+  }, [profile]);
 
   const sortedRecords = useMemo(() => {
     return [...records].sort((a, b) => a.id.localeCompare(b.id));
@@ -327,6 +338,36 @@ function App() {
   const handleConfigChange = (field: keyof FinancialConfig, value: string) => {
     const num = parseFloat(value) || 0;
     setConfig(prev => ({ ...prev, [field]: num }));
+  };
+
+  const handleProfileSelfYearChange = (value: string) => {
+    const year = parseInt(value, 10);
+    setProfile(prev => ({ ...prev, selfBirthYear: isNaN(year) ? undefined : year }));
+  };
+
+  const handleAddChild = () => {
+    const currentYear = new Date().getFullYear();
+    const newChild: ChildProfile = {
+      id: Date.now().toString(),
+      name: `子供${profile.children.length + 1}`,
+      birthYear: currentYear,
+    };
+    setProfile(prev => ({ ...prev, children: [...prev.children, newChild] }));
+  };
+
+  const handleUpdateChild = (id: string, field: keyof ChildProfile, value: string) => {
+    setProfile(prev => ({
+      ...prev,
+      children: prev.children.map(c => {
+        if (c.id !== id) return c;
+        if (field === 'birthYear') return { ...c, birthYear: parseInt(value, 10) || c.birthYear };
+        return { ...c, [field]: value };
+      }),
+    }));
+  };
+
+  const handleRemoveChild = (id: string) => {
+    setProfile(prev => ({ ...prev, children: prev.children.filter(c => c.id !== id) }));
   };
 
   // Common classes
@@ -755,10 +796,88 @@ function App() {
       { key: 'targetInvestmentAddon', label: '投資追加額' },
     ];
 
+    const currentYear = new Date().getFullYear();
+
     return (
       <div className="space-y-4">
         <div>
           <h2 className={`text-xl font-bold ${primaryText}`}>設定</h2>
+        </div>
+
+        {/* Profile */}
+        <div className={`${cardClass} p-5`}>
+          <div className={`text-[11px] font-semibold ${subtleText} mb-3 uppercase tracking-wider`}>プロフィール</div>
+
+          <div className="space-y-4">
+            <div>
+              <label className={`block text-sm font-medium ${primaryText} mb-1.5`}>自分の生年</label>
+              <input
+                type="number"
+                value={profile.selfBirthYear ?? ''}
+                onChange={(e) => handleProfileSelfYearChange(e.target.value)}
+                placeholder="例) 1990"
+                min={1900}
+                max={currentYear}
+                className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2.5 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:border-transparent outline-none transition-colors"
+              />
+              {profile.selfBirthYear && (
+                <p className={`text-[10px] ${subtleText} mt-1`}>現在 {currentYear - profile.selfBirthYear}歳</p>
+              )}
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className={`block text-sm font-medium ${primaryText}`}>子供</label>
+                <button
+                  onClick={handleAddChild}
+                  className="text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center gap-0.5"
+                >
+                  <Plus size={12} /> 追加
+                </button>
+              </div>
+
+              {profile.children.length === 0 ? (
+                <p className={`text-xs ${subtleText} bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-3 text-center`}>
+                  子供を登録すると予測タブで自動的にライフステージを生成できます
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {profile.children.map(child => (
+                    <div key={child.id} className="bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2.5 flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={child.name}
+                        onChange={(e) => handleUpdateChild(child.id, 'name', e.target.value)}
+                        className="flex-1 min-w-0 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-sm border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-zinc-400"
+                        placeholder="名前"
+                      />
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          value={child.birthYear}
+                          onChange={(e) => handleUpdateChild(child.id, 'birthYear', e.target.value)}
+                          min={1990}
+                          max={currentYear}
+                          className="w-20 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-sm border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-zinc-400 text-right"
+                        />
+                        <span className={`text-xs ${subtleText}`}>年生</span>
+                      </div>
+                      <span className={`text-xs ${subtleText} whitespace-nowrap`}>
+                        {currentYear - child.birthYear}歳
+                      </span>
+                      <button
+                        onClick={() => handleRemoveChild(child.id)}
+                        className="p-1.5 text-zinc-400 hover:text-rose-500 transition-colors"
+                        title="削除"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Theme */}
@@ -882,6 +1001,7 @@ function App() {
                 setSimMonthlyInvestStr(invest.toString());
               }}
               isMasked={isMasked}
+              profile={profile}
             />
           </div>
         )}
