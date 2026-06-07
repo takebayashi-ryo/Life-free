@@ -52,6 +52,17 @@ export interface SimulationCase {
   targetAmount: number;
 }
 
+export interface ChildProfile {
+  id: string;
+  name: string;
+  birthYear: number;
+}
+
+export interface UserProfile {
+  selfBirthYear?: number;
+  children: ChildProfile[];
+}
+
 export const DEFAULT_CONFIG: FinancialConfig = {
   baseSalary: 450000,
   nurseryFee: 24000,
@@ -62,4 +73,9 @@ export const DEFAULT_CONFIG: FinancialConfig = {
   targetCash: 1000000,
   targetInvestmentBase: 150000,
   targetInvestmentAddon: 30000,
+};
+
+export const DEFAULT_PROFILE: UserProfile = {
+  selfBirthYear: undefined,
+  children: [],
 };
