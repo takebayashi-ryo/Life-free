@@ -63,6 +63,26 @@ export interface UserProfile {
   children: ChildProfile[];
 }
 
+export interface LifePlanEvent {
+  id: string;
+  label: string;          // 例: "保育料", "昇進"
+  monthlyAmount: number;  // 月額、収入なら正、支出なら負（投資余力への影響）
+  category: 'income' | 'expense';
+  source: 'ai' | 'user';
+}
+
+export interface LifePlanYear {
+  yearOffset: number;     // 0 = 今年, 1 = 来年
+  monthlyInvest: number;  // この年の月額積立
+  memo: string;
+  events: LifePlanEvent[];
+  aiGeneratedAt?: number; // AI提案を取り込んだ時刻 (unix ms)
+}
+
+export interface LifePlan {
+  years: LifePlanYear[];  // sorted by yearOffset
+}
+
 export const DEFAULT_CONFIG: FinancialConfig = {
   baseSalary: 450000,
   nurseryFee: 24000,

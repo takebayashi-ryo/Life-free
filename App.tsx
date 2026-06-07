@@ -5,7 +5,8 @@ import {
   Home, BookOpen, BarChart3, ChevronRight, Edit3, PiggyBank,
   Copy, TrendingUp, TrendingDown, Sun, Moon, Smartphone, Download
 } from 'lucide-react';
-import { MonthlyRecord, FinancialConfig, DEFAULT_CONFIG, UserProfile, DEFAULT_PROFILE, ChildProfile } from './types';
+import { MonthlyRecord, FinancialConfig, DEFAULT_CONFIG, UserProfile, DEFAULT_PROFILE, ChildProfile, LifePlan } from './types';
+import { createDefaultLifePlan, ensureLifePlanHorizon } from './services/lifePlanService';
 import AnalysisChart from './components/AnalysisChart';
 import MonthEditor from './components/MonthEditor';
 import Simulator from './components/Simulator';
@@ -16,6 +17,7 @@ import { generateDashboardAnswer } from './services/geminiService';
 const STORAGE_KEY_CONFIG = 'assetflow_config_v1';
 const STORAGE_KEY_THEME = 'lifefree_theme_v1';
 const STORAGE_KEY_PROFILE = 'lifefree_profile_v1';
+const STORAGE_KEY_LIFEPLAN = 'lifefree_lifeplan_v1';
 
 type Tab = 'home' | 'records' | 'simulator' | 'analysis' | 'settings';
 type ThemeMode = 'light' | 'dark' | 'auto';
@@ -39,6 +41,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [config, setConfig] = useState<FinancialConfig>(DEFAULT_CONFIG);
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+  const [lifePlan, setLifePlan] = useState<LifePlan>(() => createDefaultLifePlan(DEFAULT_PROFILE));
   const [records, setRecords] = useState<MonthlyRecord[]>([]);
   const [isLoadingRecords, setIsLoadingRecords] = useState(true);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -90,6 +93,11 @@ function App() {
     if (savedProfile) {
       setProfile(JSON.parse(savedProfile));
     }
+
+    const savedLifePlan = localStorage.getItem(STORAGE_KEY_LIFEPLAN);
+    if (savedLifePlan) {
+      setLifePlan(JSON.parse(savedLifePlan));
+    }
   }, []);
 
   useEffect(() => {
@@ -107,6 +115,16 @@ function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(profile));
   }, [profile]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_LIFEPLAN, JSON.stringify(lifePlan));
+  }, [lifePlan]);
+
+  // Ensure the life plan has the right horizon (in case profile changes shift defaults)
+  useEffect(() => {
+    setLifePlan(prev => ensureLifePlanHorizon(prev, profile, 80000));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const sortedRecords = useMemo(() => {
     return [...records].sort((a, b) => a.id.localeCompare(b.id));
@@ -370,6 +388,10 @@ function App() {
     setProfile(prev => ({ ...prev, children: prev.children.filter(c => c.id !== id) }));
   };
 
+  const handleResetLifePlan = () => {
+    setLifePlan(createDefaultLifePlan(profile));
+  };
+
   // Common classes
   const cardClass = "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl";
   const subtleText = "text-zinc-500 dark:text-zinc-500";
@@ -523,32 +545,58 @@ function App() {
           )}
         </div>
 
-        {/* Strategy Phase (simplified, single card) */}
+        {/* Profile context + Strategy Phase */}
         <div className={`${cardClass} p-5`}>
-          <div className="flex items-center gap-2 mb-2">
-            <Target size={14} className={subtleText} />
-            <span className={`text-xs ${subtleText}`}>現在の戦略</span>
-          </div>
-          {isLoadingRecords ? (
-            <>
-              <div className={`text-base font-bold ${primaryText} mb-1`}>—</div>
-              <p className={`text-sm ${subtleText} leading-relaxed`}>読み込み中…</p>
-            </>
-          ) : currentCash < config.targetCash ? (
-            <>
-              <div className={`text-base font-bold ${primaryText} mb-1`}>現金優先フェーズ</div>
-              <p className={`text-sm ${subtleText} leading-relaxed`}>
-                生活防衛資金が{(config.targetCash / 10000).toFixed(0)}万円に達するまで、余剰資金は現金プールへ
-              </p>
-            </>
-          ) : (
-            <>
-              <div className="text-base font-bold text-emerald-600 dark:text-emerald-400 mb-1">投資最大化フェーズ</div>
-              <p className={`text-sm ${subtleText} leading-relaxed`}>
-                現金目標達成！余剰資金を積極的に投資へ
-              </p>
-            </>
-          )}
+          {(() => {
+            const currentYear = new Date().getFullYear();
+            const selfAge = profile.selfBirthYear ? currentYear - profile.selfBirthYear : undefined;
+            const childAges = profile.children.map(c => ({ name: c.name, age: currentYear - c.birthYear }));
+            const hasProfile = selfAge !== undefined || childAges.length > 0;
+
+            return (
+              <>
+                {hasProfile && (
+                  <div className="flex items-center gap-2 mb-3 flex-wrap">
+                    {selfAge !== undefined && (
+                      <span className={`text-[11px] ${subtleText} bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full`}>
+                        あなた {selfAge}歳
+                      </span>
+                    )}
+                    {childAges.map((c, i) => (
+                      <span key={i} className={`text-[11px] ${subtleText} bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full`}>
+                        {c.name} {c.age}歳
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 mb-2">
+                  <Target size={14} className={subtleText} />
+                  <span className={`text-xs ${subtleText}`}>現在の戦略</span>
+                </div>
+                {isLoadingRecords ? (
+                  <>
+                    <div className={`text-base font-bold ${primaryText} mb-1`}>—</div>
+                    <p className={`text-sm ${subtleText} leading-relaxed`}>読み込み中…</p>
+                  </>
+                ) : currentCash < config.targetCash ? (
+                  <>
+                    <div className={`text-base font-bold ${primaryText} mb-1`}>現金優先フェーズ</div>
+                    <p className={`text-sm ${subtleText} leading-relaxed`}>
+                      生活防衛資金が{(config.targetCash / 10000).toFixed(0)}万円に達するまで、余剰資金は現金プールへ
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-base font-bold text-emerald-600 dark:text-emerald-400 mb-1">投資最大化フェーズ</div>
+                    <p className={`text-sm ${subtleText} leading-relaxed`}>
+                      現金目標達成！余剰資金を積極的に投資へ
+                    </p>
+                  </>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
     );
@@ -988,20 +1036,21 @@ function App() {
         {activeTab === 'simulator' && (
           <div className="space-y-3">
             <div className="mb-2">
-              <h2 className={`text-xl font-bold ${primaryText}`}>シミュレーター</h2>
-              <p className={`text-xs ${subtleText} mt-1`}>将来の資産推移を予測</p>
+              <h2 className={`text-xl font-bold ${primaryText}`}>予測</h2>
+              <p className={`text-xs ${subtleText} mt-1`}>ライフプランから将来の資産推移を予測</p>
             </div>
             <Simulator
               initialCash={currentCash}
               initialInvest={currentInvestTotal}
-              initialMonthlyInvest={simMonthlyInvest}
               sharedRate={simRate}
-              onSharedChange={(rate, invest) => {
+              onSharedChange={(rate) => {
                 setSimRateStr(rate.toString());
-                setSimMonthlyInvestStr(invest.toString());
               }}
               isMasked={isMasked}
               profile={profile}
+              lifePlan={lifePlan}
+              onLifePlanChange={setLifePlan}
+              onResetLifePlan={handleResetLifePlan}
             />
           </div>
         )}
