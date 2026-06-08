@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { FinancialConfig, MonthlyRecord } from "../types";
+import { FinancialConfig, MonthlyRecord, LifePlanEvent } from "../types";
 
 export const generateFinancialAdvice = async (
   currentMonth: MonthlyRecord,
@@ -135,5 +135,83 @@ ${idx + 1}. ${r.id}:
   } catch (error) {
     console.error("Gemini API Error (Dashboard Q&A):", error);
     return "AI回答の取得中にエラーが発生しました。";
+  }
+};
+
+export interface YearSuggestionInput {
+  calendarYear: number;
+  yearOffset: number;        // 何年後か
+  selfAge?: number;
+  childAges: Array<{ name: string; age: number }>;
+  lifeStageLabel?: string;
+}
+
+export interface YearSuggestionResult {
+  events: Array<Omit<LifePlanEvent, 'id' | 'source'>>;
+  rationale: string;
+}
+
+// その年に予想される収支イベントをAIに提案させる
+export const suggestLifeEvents = async (input: YearSuggestionInput): Promise<YearSuggestionResult> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  const childInfo = input.childAges.length > 0
+    ? input.childAges.map(c => `${c.name}: ${c.age}歳`).join(', ')
+    : '子供なし';
+
+  const prompt = `
+あなたは日本のファイナンシャルプランナーです。以下の家庭が「${input.calendarYear}年」(${input.yearOffset === 0 ? '今年' : `${input.yearOffset}年後`})に直面する可能性のある月次の収入・支出イベントを予測してください。
+
+【家庭の状況】
+- 自分の年齢: ${input.selfAge !== undefined ? `${input.selfAge}歳` : '不明'}
+- 子供: ${childInfo}
+- ライフステージ: ${input.lifeStageLabel || '不明'}
+
+【出力フォーマット】
+以下のJSONを **そのまま** 返してください。説明文や前置きは一切不要です。コードブロックや \`\`\`json も付けないでください。
+
+{
+  "events": [
+    { "label": "保育料", "monthlyAmount": 24000, "category": "expense" },
+    { "label": "児童手当", "monthlyAmount": 30000, "category": "income" }
+  ],
+  "rationale": "保育園期のため保育料が発生。児童手当は中学卒業まで継続。"
+}
+
+【ルール】
+1. monthlyAmount は **正の整数** (月額・円)。category で支出か収入か判別。
+2. 一般的かつ標準的な金額を使用（保育料は地域差ありますが2-3万円目安、習い事1万円目安、塾2万円目安など）
+3. eventsは最大6件まで
+4. rationaleは100文字以内
+5. 子供が複数いる場合、それぞれに対応した支出を別エントリで列挙
+6. その年に "新たに発生する" or "継続する" 主要な収支イベントのみ
+`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+    });
+    const text = response.text || '';
+
+    // JSON取り出し（コードブロックで囲まれていても対応）
+    const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('JSON not found in response');
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    const events: Array<Omit<LifePlanEvent, 'id' | 'source'>> = (parsed.events || []).map((e: any) => ({
+      label: String(e.label || ''),
+      monthlyAmount: Math.max(0, Math.round(Number(e.monthlyAmount) || 0)),
+      category: e.category === 'income' ? 'income' : 'expense',
+    }));
+
+    return {
+      events,
+      rationale: String(parsed.rationale || ''),
+    };
+  } catch (error) {
+    console.error("Gemini API Error (Year Suggestion):", error);
+    throw error;
   }
 };

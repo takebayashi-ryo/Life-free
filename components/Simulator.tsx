@@ -3,21 +3,26 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine
 } from 'recharts';
-import { Calculator, Target, TrendingUp, AlertCircle, Wallet, Save, Trash2, Bookmark, ChevronRight, X } from 'lucide-react';
-import { SimulationCase } from '../types';
-import { calculateSimulation } from '../services/simulationService';
+import { Calculator, Target, AlertCircle, Wallet, Save, Trash2, Bookmark, ChevronRight, X } from 'lucide-react';
+import { SimulationCase, LifePlan, UserProfile } from '../types';
+import { calculateSimulation, SimulationPhase } from '../services/simulationService';
+import { lifePlanToPhases } from '../services/lifePlanService';
+import LifePlanTimeline from './LifePlanTimeline';
+
+const STORAGE_KEY_CASES = 'assetflow_sim_cases_v1';
+const MASK = '✳︎✳︎✳︎✳︎✳︎✳︎';
 
 interface SimulatorProps {
   initialCash: number;
   initialInvest: number;
-  initialMonthlyInvest: number;
   sharedRate?: number;
-  onSharedChange?: (rate: number, monthlyInvest: number) => void;
+  onSharedChange?: (rate: number) => void;
   isMasked?: boolean;
+  profile: UserProfile;
+  lifePlan: LifePlan;
+  onLifePlanChange: (plan: LifePlan) => void;
+  onResetLifePlan: () => void;
 }
-
-const STORAGE_KEY_CASES = 'assetflow_sim_cases_v1';
-const MASK = '✳︎✳︎✳︎✳︎✳︎✳︎';
 
 function useIsDark() {
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
@@ -32,14 +37,14 @@ function useIsDark() {
 }
 
 const Simulator: React.FC<SimulatorProps> = ({
-  initialCash, initialInvest, initialMonthlyInvest, sharedRate, onSharedChange, isMasked = false,
+  initialCash, initialInvest, sharedRate, onSharedChange, isMasked = false,
+  profile, lifePlan, onLifePlanChange, onResetLifePlan,
 }) => {
   const isDark = useIsDark();
 
   const [params, setParams] = useState({
     cash: initialCash.toString(),
     invest: initialInvest.toString(),
-    monthlyInvest: (initialMonthlyInvest || 50000).toString(),
     annualRate: (sharedRate || 6.0).toString(),
     targetAmount: "10000000",
   });
@@ -59,31 +64,34 @@ const Simulator: React.FC<SimulatorProps> = ({
     }
   }, [sharedRate]);
 
+  // Sync initial cash/invest from parent when they change (e.g. on records load)
   useEffect(() => {
-    if (initialMonthlyInvest !== undefined && Number(params.monthlyInvest) !== initialMonthlyInvest) {
-      setParams(prev => ({ ...prev, monthlyInvest: initialMonthlyInvest.toString() }));
-    }
-  }, [initialMonthlyInvest]);
+    setParams(prev => ({ ...prev, cash: initialCash.toString() }));
+  }, [initialCash]);
+
+  useEffect(() => {
+    setParams(prev => ({ ...prev, invest: initialInvest.toString() }));
+  }, [initialInvest]);
 
   const handleParamChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setParams(prev => ({ ...prev, [name]: value }));
 
-    if (onSharedChange) {
-      if (name === 'annualRate') {
-        onSharedChange(Number(value), Number(params.monthlyInvest));
-      } else if (name === 'monthlyInvest') {
-        onSharedChange(Number(params.annualRate), Number(value));
-      }
+    if (onSharedChange && name === 'annualRate') {
+      onSharedChange(Number(value));
     }
   };
 
   const handleSaveCase = () => {
     if (!caseNameInput.trim()) return;
+    // 平均月積立を保存値に
+    const avgMonthly = lifePlan.years.length > 0
+      ? Math.round(lifePlan.years.reduce((s, y) => s + y.monthlyInvest, 0) / lifePlan.years.length)
+      : 0;
     const newCase: SimulationCase = {
       id: Date.now().toString(),
       name: caseNameInput,
-      monthlyInvest: Number(params.monthlyInvest),
+      monthlyInvest: avgMonthly,
       annualRate: Number(params.annualRate),
       targetAmount: Number(params.targetAmount)
     };
@@ -97,11 +105,10 @@ const Simulator: React.FC<SimulatorProps> = ({
   const handleLoadCase = (c: SimulationCase) => {
     setParams(prev => ({
       ...prev,
-      monthlyInvest: c.monthlyInvest.toString(),
       annualRate: c.annualRate.toString(),
       targetAmount: c.targetAmount.toString()
     }));
-    if (onSharedChange) onSharedChange(c.annualRate, c.monthlyInvest);
+    if (onSharedChange) onSharedChange(c.annualRate);
   };
 
   const handleDeleteCase = (id: string, e: React.MouseEvent) => {
@@ -114,13 +121,20 @@ const Simulator: React.FC<SimulatorProps> = ({
   const { data, yearlyData, currentValues } = useMemo(() => {
     const pCash = Number(params.cash) || 0;
     const pInvest = Number(params.invest) || 0;
-    const pMonthlyInvest = Number(params.monthlyInvest) || 0;
     const pAnnualRate = Number(params.annualRate) || 0;
     const pTargetAmount = Number(params.targetAmount) || 0;
 
-    const result = calculateSimulation(pCash, pInvest, pMonthlyInvest, pAnnualRate);
+    const phases: SimulationPhase[] = lifePlanToPhases(lifePlan).map(p => ({
+      id: p.id,
+      startYearOffset: p.startYearOffset,
+      monthlyInvest: p.monthlyInvest,
+      label: p.label,
+    }));
+
+    const investArg = phases.length > 0 ? phases : 0;
+    const result = calculateSimulation(pCash, pInvest, investArg, pAnnualRate);
     return { ...result, currentValues: { target: pTargetAmount, cash: pCash } };
-  }, [params]);
+  }, [params, lifePlan]);
 
   const inputClass = "w-full bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-700 rounded-lg pl-7 pr-3 py-2 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:border-transparent outline-none transition-colors text-sm";
   const labelClass = "block text-xs text-zinc-500 dark:text-zinc-400 mb-1 font-medium";
@@ -158,7 +172,7 @@ const Simulator: React.FC<SimulatorProps> = ({
           >
             <span>{c.name}</span>
             <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
-              {isMasked ? `(${MASK})` : `(¥${(c.monthlyInvest / 10000).toFixed(0)}万/${c.annualRate}%)`}
+              {isMasked ? `(${MASK})` : `(平均¥${(c.monthlyInvest / 10000).toFixed(0)}万/${c.annualRate}%)`}
             </span>
             <div
               onClick={(e) => handleDeleteCase(c.id, e)}
@@ -175,7 +189,7 @@ const Simulator: React.FC<SimulatorProps> = ({
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
             <Calculator className="text-zinc-500" size={16} />
-            シミュレーション設定
+            前提条件
           </h2>
           {!isSaveMode ? (
             <button
@@ -232,17 +246,7 @@ const Simulator: React.FC<SimulatorProps> = ({
           </div>
 
           <div className="bg-zinc-50 dark:bg-zinc-950/60 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3">
-            <h3 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 mb-3">
-              <TrendingUp size={13} className="text-zinc-500" /> 積立・運用プラン
-            </h3>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelClass}>毎月の積立額</label>
-                <div className="relative">
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">¥</span>
-                  <input type="number" name="monthlyInvest" value={params.monthlyInvest} onChange={handleParamChange} className={`${inputClass} font-bold`} placeholder="0" />
-                </div>
-              </div>
               <div>
                 <label className={labelClass}>想定年利 (%)</label>
                 <div className="relative">
@@ -258,22 +262,27 @@ const Simulator: React.FC<SimulatorProps> = ({
                   <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">%</span>
                 </div>
               </div>
-            </div>
-          </div>
-
-          <div className="bg-zinc-50 dark:bg-zinc-950/60 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3">
-            <h3 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 mb-3">
-              <Target size={13} className="text-zinc-500" /> 目標ゴール
-            </h3>
-            <div>
-              <label className={labelClass}>目標資産額</label>
-              <div className="relative">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">¥</span>
-                <input type="number" name="targetAmount" value={params.targetAmount} onChange={handleParamChange} className={`${inputClass} font-bold`} placeholder="10000000" />
+              <div>
+                <label className={labelClass}><Target size={11} className="inline mr-1 text-zinc-500" />目標資産</label>
+                <div className="relative">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">¥</span>
+                  <input type="number" name="targetAmount" value={params.targetAmount} onChange={handleParamChange} className={`${inputClass} font-bold`} placeholder="10000000" />
+                </div>
               </div>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Life Plan Timeline */}
+      <div className={`${cardClass} p-5`}>
+        <LifePlanTimeline
+          profile={profile}
+          plan={lifePlan}
+          onChange={onLifePlanChange}
+          onResetFromProfile={onResetLifePlan}
+          isMasked={isMasked}
+        />
       </div>
 
       {/* Result Summary */}

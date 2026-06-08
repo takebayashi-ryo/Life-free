@@ -23,10 +23,36 @@ export interface SimulationResult {
   };
 }
 
+export interface SimulationPhase {
+  id: string;
+  startYearOffset: number; // years from "now"
+  monthlyInvest: number;
+  label: string;
+}
+
+const resolveMonthlyInvest = (
+  monthIdx: number,
+  phases: SimulationPhase[],
+  fallback: number
+): number => {
+  if (phases.length === 0) return fallback;
+  const yearOffset = monthIdx / 12;
+  const sorted = [...phases].sort((a, b) => a.startYearOffset - b.startYearOffset);
+  let amount = sorted[0].monthlyInvest;
+  for (const p of sorted) {
+    if (yearOffset >= p.startYearOffset) {
+      amount = p.monthlyInvest;
+    } else {
+      break;
+    }
+  }
+  return amount;
+};
+
 export const calculateSimulation = (
   initialCash: number,
   initialInvest: number,
-  monthlyInvest: number,
+  monthlyInvest: number | SimulationPhase[],
   annualRate: number,
   months: number = 360 // 30 years
 ): SimulationResult => {
@@ -35,9 +61,12 @@ export const calculateSimulation = (
 
   let currentInvestPrincipal = initialInvest;
   let currentInvestTotal = initialInvest;
-  const currentCash = initialCash; // Assuming cash stays constant for this projection
+  const currentCash = initialCash;
   const monthlyRate = annualRate / 100 / 12;
   const today = new Date();
+
+  const phases = Array.isArray(monthlyInvest) ? monthlyInvest : [];
+  const flatAmount = Array.isArray(monthlyInvest) ? 0 : monthlyInvest;
 
   const milestones = {
     m1000: null as Date | null,
@@ -50,14 +79,14 @@ export const calculateSimulation = (
     const monthStr = date.toISOString().slice(0, 7);
 
     if (i > 0) {
-      currentInvestPrincipal += monthlyInvest;
-      currentInvestTotal = (currentInvestTotal * (1 + monthlyRate)) + monthlyInvest;
+      const amount = resolveMonthlyInvest(i, phases, flatAmount);
+      currentInvestPrincipal += amount;
+      currentInvestTotal = (currentInvestTotal * (1 + monthlyRate)) + amount;
     }
 
     const profit = currentInvestTotal - currentInvestPrincipal;
     const total = currentCash + currentInvestTotal;
 
-    // Check Milestones
     if (!milestones.m1000 && total >= 10000000) milestones.m1000 = date;
     if (!milestones.m3000 && total >= 30000000) milestones.m3000 = date;
     if (!milestones.m5000 && total >= 50000000) milestones.m5000 = date;
@@ -77,7 +106,6 @@ export const calculateSimulation = (
 
     monthlyDataPoints.push(record);
 
-    // Add to yearly summary (Year 0, 1, 2...)
     if (i % 12 === 0) {
       yearlyDataPoints.push(record);
     }
