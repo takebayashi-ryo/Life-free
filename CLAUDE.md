@@ -47,6 +47,7 @@ components/
   AnalysisChart.tsx         # 資産推移グラフ (分析タブ用)
   Simulator.tsx             # 予測タブ全体 (LifePlanTimelineを内包)
   LifePlanTimeline.tsx      # ライフプラン年カードのUI
+.github/workflows/ci.yml    # CI (型チェック + ビルド)
 index.html                  # Tailwind CDN + darkMode設定
 ```
 
@@ -73,16 +74,41 @@ index.html                  # Tailwind CDN + darkMode設定
 - 下部にfixed tab nav、`env(safe-area-inset-bottom)` 対応
 - タッチしやすいボタンサイズ
 
+## 検証コマンド (重要)
+
+```bash
+npm run typecheck   # tsc --noEmit — 型エラーを検出
+npm run build       # vite build — バンドル生成
+```
+
+⚠️ **`npm run build` だけでは型エラーを検出できません。** Viteは内部でesbuildを使っており、
+型注釈を剥がすだけで型検査はしません。**必ず `typecheck` も実行してください。**
+
+## CI (GitHub Actions)
+
+`.github/workflows/ci.yml` が全ブランチへのpushとmainへのPRで自動実行されます。
+
+| ステップ | 内容 |
+|---|---|
+| `npm ci` | lockfile通りに依存をインストール |
+| `npm run typecheck` | 型エラー検出 |
+| `npm run build` | ビルド検証 |
+
+- 実行時間の目安: 約20秒
+- 同じブランチに連続pushした場合、古い実行は自動キャンセル (`concurrency`)
+- **GitHub MCP経由で直接編集した場合も、このCIが安全網になります**
+
 ## 開発ワークフロー
 
 ### 優先: GitHub MCP経由での直接編集 (推奨)
 - 小〜中規模の変更: `mcp__github__create_or_update_file` / `push_files` で直接リモート書き換え
 - 状態同期のブレを防ぐ (以前ローカル/リモートが食い違ってトラブルあり)
+- push後は **必ず `actions_list` / `actions_get` でCI結果を確認する**
 - Vercel が push を検知して自動デプロイ
 
 ### ローカル経由 (大規模変更のみ)
 1. **ブランチ命名**: `claude/<feature-name>` (例: `claude/lifeplan-timeline`)
-2. **コミット前**: `npm run build` で型・依存エラーチェック必須
+2. **コミット前**: `npm run typecheck && npm run build` の両方を実行
 3. **プレビュー**: pushするとVercelが2〜3分でデプロイ
 4. **mainへの反映**: `git merge --squash <branch>` → commit → push
 
@@ -95,17 +121,20 @@ index.html                  # Tailwind CDN + darkMode設定
 - 前月コピーで新規記録作成
 - CSV月別ダウンロード (各記録カードに📥ボタン)
 - 起動時の総資産ちらつき修正 (ロード中は `¥—` 表示)
-- プロフィール (自分の生年 + 子供の名前・生年 複数登録可)
 - 分析グラフに総資産ライン追加
 - ヘッダー簡素化、シミュタブ→「予測」に改名
+- **CI (型チェック + ビルド) 導入**
 
 ### 未マージのブランチ
-- **`claude/lifeplan-timeline`** ← ライフプラン・タイムライン機能
-  - 年カードで自分・子供の年齢自動表示
-  - Gemini APIによる年別収支イベント提案 (`suggestLifeEvents`)
-  - 月積立額・メモ・イベントを年ごとに編集
-  - 予測タブ全体のUXを刷新 (旧phases UI廃止)
-  - 動作確認後にmainマージ予定
+- **`claude/lifeplan-timeline`** ← 3コミット分が未反映
+  1. `a2091e6` ライフステージ別積立モード
+  2. `5ec5c33` プロフィール機能 (自分の生年 + 子供の名前・生年、複数登録可)
+  3. `ef6d316` ライフプラン・タイムライン刷新
+     - 年カードで自分・子供の年齢を自動表示
+     - Gemini APIによる年別収支イベント提案 (`suggestLifeEvents`)
+     - 月積立額・メモ・イベントを年ごとに編集
+     - 旧phases UIを廃止
+  - **動作確認後にmainマージ予定** (特にAI提案がVercel本番で動くか未検証)
 
 ## 環境変数
 - `API_KEY` — Gemini API key (Vercel環境変数で設定済み)
@@ -135,7 +164,7 @@ index.html                  # Tailwind CDN + darkMode設定
 - [ ] `claude/lifeplan-timeline` の動作確認 → mainマージ
 - [ ] ホーム画面にライフプラン概観カード追加 (今年のフェーズ・今月の目標額)
 - [ ] AIアドバイスにライフプラン情報を含める (現在は月次単位のみ)
-- [ ] PR自動監視ワークフローの検討 (`subscribe_pr_activity`)
+- [ ] PWA対応 (manifest.json + Service Worker) — iOS化の第一歩
 
 ## コーディング規約
 
