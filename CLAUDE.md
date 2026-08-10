@@ -152,7 +152,11 @@ npm run build       # vite build — バンドル生成
 | `monthly_records` | 月次記録 |
 | `app_settings` | key-value形式。`profile` / `lifeplan` / `config` の3キー |
 
-`supabase/app_settings.sql` にテーブル定義あり (SQL Editorで一度だけ実行)。
+`supabase/setup.sql` に両テーブルの定義とRLSポリシーをまとめてある。
+画面から手で変更したら、このファイルにも必ず反映すること (実態とズレると再構築できなくなる)。
+
+**現状のRLS**: 両テーブルともRLS有効。anonロールに全操作を許可 (単一ユーザー前提)。
+配布時は認証を入れて `USING (auth.uid() = user_id)` に書き換える必要がある。
 
 ### localStorage
 | Key | 用途 | 同期 |
