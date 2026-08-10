@@ -5,7 +5,8 @@ import {
   Home, BookOpen, BarChart3, ChevronRight, Edit3, PiggyBank,
   Copy, TrendingUp, TrendingDown, Sun, Moon, Smartphone, Download
 } from 'lucide-react';
-import { MonthlyRecord, FinancialConfig, DEFAULT_CONFIG } from './types';
+import { MonthlyRecord, FinancialConfig, DEFAULT_CONFIG, UserProfile, DEFAULT_PROFILE, ChildProfile, LifePlan } from './types';
+import { createDefaultLifePlan, ensureLifePlanHorizon } from './services/lifePlanService';
 import AnalysisChart from './components/AnalysisChart';
 import MonthEditor from './components/MonthEditor';
 import Simulator from './components/Simulator';
@@ -15,6 +16,8 @@ import { generateDashboardAnswer } from './services/geminiService';
 
 const STORAGE_KEY_CONFIG = 'assetflow_config_v1';
 const STORAGE_KEY_THEME = 'lifefree_theme_v1';
+const STORAGE_KEY_PROFILE = 'lifefree_profile_v1';
+const STORAGE_KEY_LIFEPLAN = 'lifefree_lifeplan_v1';
 
 type Tab = 'home' | 'records' | 'simulator' | 'analysis' | 'settings';
 type ThemeMode = 'light' | 'dark' | 'auto';
@@ -37,6 +40,8 @@ function applyTheme(mode: ThemeMode) {
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [config, setConfig] = useState<FinancialConfig>(DEFAULT_CONFIG);
+  const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+  const [lifePlan, setLifePlan] = useState<LifePlan>(() => createDefaultLifePlan(DEFAULT_PROFILE));
   const [records, setRecords] = useState<MonthlyRecord[]>([]);
   const [isLoadingRecords, setIsLoadingRecords] = useState(true);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -83,6 +88,16 @@ function App() {
     if (savedConfig) {
       setConfig(JSON.parse(savedConfig));
     }
+
+    const savedProfile = localStorage.getItem(STORAGE_KEY_PROFILE);
+    if (savedProfile) {
+      setProfile(JSON.parse(savedProfile));
+    }
+
+    const savedLifePlan = localStorage.getItem(STORAGE_KEY_LIFEPLAN);
+    if (savedLifePlan) {
+      setLifePlan(JSON.parse(savedLifePlan));
+    }
   }, []);
 
   useEffect(() => {
@@ -96,6 +111,20 @@ function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(config));
   }, [config]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(profile));
+  }, [profile]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_LIFEPLAN, JSON.stringify(lifePlan));
+  }, [lifePlan]);
+
+  // Ensure the life plan has the right horizon (in case profile changes shift defaults)
+  useEffect(() => {
+    setLifePlan(prev => ensureLifePlanHorizon(prev, profile, 80000));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const sortedRecords = useMemo(() => {
     return [...records].sort((a, b) => a.id.localeCompare(b.id));
@@ -329,6 +358,40 @@ function App() {
     setConfig(prev => ({ ...prev, [field]: num }));
   };
 
+  const handleProfileSelfYearChange = (value: string) => {
+    const year = parseInt(value, 10);
+    setProfile(prev => ({ ...prev, selfBirthYear: isNaN(year) ? undefined : year }));
+  };
+
+  const handleAddChild = () => {
+    const currentYear = new Date().getFullYear();
+    const newChild: ChildProfile = {
+      id: Date.now().toString(),
+      name: `子供${profile.children.length + 1}`,
+      birthYear: currentYear,
+    };
+    setProfile(prev => ({ ...prev, children: [...prev.children, newChild] }));
+  };
+
+  const handleUpdateChild = (id: string, field: keyof ChildProfile, value: string) => {
+    setProfile(prev => ({
+      ...prev,
+      children: prev.children.map(c => {
+        if (c.id !== id) return c;
+        if (field === 'birthYear') return { ...c, birthYear: parseInt(value, 10) || c.birthYear };
+        return { ...c, [field]: value };
+      }),
+    }));
+  };
+
+  const handleRemoveChild = (id: string) => {
+    setProfile(prev => ({ ...prev, children: prev.children.filter(c => c.id !== id) }));
+  };
+
+  const handleResetLifePlan = () => {
+    setLifePlan(createDefaultLifePlan(profile));
+  };
+
   // Common classes
   const cardClass = "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl";
   const subtleText = "text-zinc-500 dark:text-zinc-500";
@@ -482,32 +545,58 @@ function App() {
           )}
         </div>
 
-        {/* Strategy Phase (simplified, single card) */}
+        {/* Profile context + Strategy Phase */}
         <div className={`${cardClass} p-5`}>
-          <div className="flex items-center gap-2 mb-2">
-            <Target size={14} className={subtleText} />
-            <span className={`text-xs ${subtleText}`}>現在の戦略</span>
-          </div>
-          {isLoadingRecords ? (
-            <>
-              <div className={`text-base font-bold ${primaryText} mb-1`}>—</div>
-              <p className={`text-sm ${subtleText} leading-relaxed`}>読み込み中…</p>
-            </>
-          ) : currentCash < config.targetCash ? (
-            <>
-              <div className={`text-base font-bold ${primaryText} mb-1`}>現金優先フェーズ</div>
-              <p className={`text-sm ${subtleText} leading-relaxed`}>
-                生活防衛資金が{(config.targetCash / 10000).toFixed(0)}万円に達するまで、余剰資金は現金プールへ
-              </p>
-            </>
-          ) : (
-            <>
-              <div className="text-base font-bold text-emerald-600 dark:text-emerald-400 mb-1">投資最大化フェーズ</div>
-              <p className={`text-sm ${subtleText} leading-relaxed`}>
-                現金目標達成！余剰資金を積極的に投資へ
-              </p>
-            </>
-          )}
+          {(() => {
+            const currentYear = new Date().getFullYear();
+            const selfAge = profile.selfBirthYear ? currentYear - profile.selfBirthYear : undefined;
+            const childAges = profile.children.map(c => ({ name: c.name, age: currentYear - c.birthYear }));
+            const hasProfile = selfAge !== undefined || childAges.length > 0;
+
+            return (
+              <>
+                {hasProfile && (
+                  <div className="flex items-center gap-2 mb-3 flex-wrap">
+                    {selfAge !== undefined && (
+                      <span className={`text-[11px] ${subtleText} bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full`}>
+                        あなた {selfAge}歳
+                      </span>
+                    )}
+                    {childAges.map((c, i) => (
+                      <span key={i} className={`text-[11px] ${subtleText} bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full`}>
+                        {c.name} {c.age}歳
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 mb-2">
+                  <Target size={14} className={subtleText} />
+                  <span className={`text-xs ${subtleText}`}>現在の戦略</span>
+                </div>
+                {isLoadingRecords ? (
+                  <>
+                    <div className={`text-base font-bold ${primaryText} mb-1`}>—</div>
+                    <p className={`text-sm ${subtleText} leading-relaxed`}>読み込み中…</p>
+                  </>
+                ) : currentCash < config.targetCash ? (
+                  <>
+                    <div className={`text-base font-bold ${primaryText} mb-1`}>現金優先フェーズ</div>
+                    <p className={`text-sm ${subtleText} leading-relaxed`}>
+                      生活防衛資金が{(config.targetCash / 10000).toFixed(0)}万円に達するまで、余剰資金は現金プールへ
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-base font-bold text-emerald-600 dark:text-emerald-400 mb-1">投資最大化フェーズ</div>
+                    <p className={`text-sm ${subtleText} leading-relaxed`}>
+                      現金目標達成！余剰資金を積極的に投資へ
+                    </p>
+                  </>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
     );
@@ -755,10 +844,88 @@ function App() {
       { key: 'targetInvestmentAddon', label: '投資追加額' },
     ];
 
+    const currentYear = new Date().getFullYear();
+
     return (
       <div className="space-y-4">
         <div>
           <h2 className={`text-xl font-bold ${primaryText}`}>設定</h2>
+        </div>
+
+        {/* Profile */}
+        <div className={`${cardClass} p-5`}>
+          <div className={`text-[11px] font-semibold ${subtleText} mb-3 uppercase tracking-wider`}>プロフィール</div>
+
+          <div className="space-y-4">
+            <div>
+              <label className={`block text-sm font-medium ${primaryText} mb-1.5`}>自分の生年</label>
+              <input
+                type="number"
+                value={profile.selfBirthYear ?? ''}
+                onChange={(e) => handleProfileSelfYearChange(e.target.value)}
+                placeholder="例) 1990"
+                min={1900}
+                max={currentYear}
+                className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2.5 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:border-transparent outline-none transition-colors"
+              />
+              {profile.selfBirthYear && (
+                <p className={`text-[10px] ${subtleText} mt-1`}>現在 {currentYear - profile.selfBirthYear}歳</p>
+              )}
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className={`block text-sm font-medium ${primaryText}`}>子供</label>
+                <button
+                  onClick={handleAddChild}
+                  className="text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center gap-0.5"
+                >
+                  <Plus size={12} /> 追加
+                </button>
+              </div>
+
+              {profile.children.length === 0 ? (
+                <p className={`text-xs ${subtleText} bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-3 text-center`}>
+                  子供を登録すると予測タブで自動的にライフステージを生成できます
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {profile.children.map(child => (
+                    <div key={child.id} className="bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2.5 flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={child.name}
+                        onChange={(e) => handleUpdateChild(child.id, 'name', e.target.value)}
+                        className="flex-1 min-w-0 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-sm border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-zinc-400"
+                        placeholder="名前"
+                      />
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          value={child.birthYear}
+                          onChange={(e) => handleUpdateChild(child.id, 'birthYear', e.target.value)}
+                          min={1990}
+                          max={currentYear}
+                          className="w-20 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-sm border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-zinc-400 text-right"
+                        />
+                        <span className={`text-xs ${subtleText}`}>年生</span>
+                      </div>
+                      <span className={`text-xs ${subtleText} whitespace-nowrap`}>
+                        {currentYear - child.birthYear}歳
+                      </span>
+                      <button
+                        onClick={() => handleRemoveChild(child.id)}
+                        className="p-1.5 text-zinc-400 hover:text-rose-500 transition-colors"
+                        title="削除"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Theme */}
@@ -869,19 +1036,21 @@ function App() {
         {activeTab === 'simulator' && (
           <div className="space-y-3">
             <div className="mb-2">
-              <h2 className={`text-xl font-bold ${primaryText}`}>シミュレーター</h2>
-              <p className={`text-xs ${subtleText} mt-1`}>将来の資産推移を予測</p>
+              <h2 className={`text-xl font-bold ${primaryText}`}>予測</h2>
+              <p className={`text-xs ${subtleText} mt-1`}>ライフプランから将来の資産推移を予測</p>
             </div>
             <Simulator
               initialCash={currentCash}
               initialInvest={currentInvestTotal}
-              initialMonthlyInvest={simMonthlyInvest}
               sharedRate={simRate}
-              onSharedChange={(rate, invest) => {
+              onSharedChange={(rate) => {
                 setSimRateStr(rate.toString());
-                setSimMonthlyInvestStr(invest.toString());
               }}
               isMasked={isMasked}
+              profile={profile}
+              lifePlan={lifePlan}
+              onLifePlanChange={setLifePlan}
+              onResetLifePlan={handleResetLifePlan}
             />
           </div>
         )}
