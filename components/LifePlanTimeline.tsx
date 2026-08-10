@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, Sparkles, Plus, Trash2, MessageSquare, TrendingUp, TrendingDown, AlertCircle, User, Baby } from 'lucide-react';
 import { LifePlan, LifePlanYear, LifePlanEvent, UserProfile } from '../types';
-import { buildYearContext, YearContext } from '../services/lifePlanService';
+import { buildYearContext, calcYearAmounts, YearContext } from '../services/lifePlanService';
 import { suggestLifeEvents } from '../services/geminiService';
 
 interface LifePlanTimelineProps {
@@ -160,8 +160,7 @@ const LifePlanTimeline: React.FC<LifePlanTimelineProps> = ({
           const isLoading = loadingAiYears.has(year.yearOffset);
           const errorMsg = errorYears.get(year.yearOffset);
 
-          const totalExpense = year.events.filter(e => e.category === 'expense').reduce((s, e) => s + e.monthlyAmount, 0);
-          const totalIncome = year.events.filter(e => e.category === 'income').reduce((s, e) => s + e.monthlyAmount, 0);
+          const amounts = calcYearAmounts(year);
 
           return (
             <div
@@ -202,8 +201,8 @@ const LifePlanTimeline: React.FC<LifePlanTimelineProps> = ({
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                    {formatAmount(year.monthlyInvest)}
+                  <div className={`text-sm font-semibold ${amounts.isShortfall ? 'text-rose-600 dark:text-rose-400' : 'text-zinc-900 dark:text-zinc-100'}`}>
+                    {formatAmount(amounts.effective)}
                   </div>
                   <div className="text-[10px] text-zinc-500">月積立</div>
                 </div>
@@ -212,9 +211,12 @@ const LifePlanTimeline: React.FC<LifePlanTimelineProps> = ({
               {/* Expanded content */}
               {isExpanded && (
                 <div className="px-4 pb-4 border-t border-zinc-100 dark:border-zinc-800 space-y-3 pt-3">
-                  {/* Monthly invest input */}
+                  {/* Base capacity input */}
                   <div>
-                    <label className="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-1">月の積立額</label>
+                    <label className="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                      基本の投資余力
+                      <span className="ml-1 text-zinc-400 dark:text-zinc-500 font-normal">子供関連を除いた額</span>
+                    </label>
                     <div className="relative">
                       <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">¥</span>
                       <input
@@ -272,63 +274,94 @@ const LifePlanTimeline: React.FC<LifePlanTimelineProps> = ({
                         {year.events.map(event => (
                           <div
                             key={event.id}
-                            className={`flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-800/60 border rounded-lg p-1.5 ${
+                            className={`bg-zinc-50 dark:bg-zinc-800/60 border rounded-lg p-2 space-y-1.5 ${
                               event.category === 'income'
                                 ? 'border-emerald-200/60 dark:border-emerald-500/20'
                                 : 'border-zinc-200 dark:border-zinc-800'
                             }`}
                           >
-                            {event.category === 'income' ? (
-                              <TrendingUp size={12} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0 ml-0.5" />
-                            ) : (
-                              <TrendingDown size={12} className="text-rose-500 flex-shrink-0 ml-0.5" />
-                            )}
-                            <input
-                              type="text"
-                              value={event.label}
-                              onChange={(e) => updateEvent(year.yearOffset, event.id, { label: e.target.value })}
-                              placeholder="項目名"
-                              className="flex-1 min-w-0 text-[11px] bg-transparent text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-700 rounded px-1.5 py-1 outline-none focus:ring-1 focus:ring-zinc-400"
-                            />
-                            <select
-                              value={event.category}
-                              onChange={(e) => updateEvent(year.yearOffset, event.id, { category: e.target.value as 'income' | 'expense' })}
-                              className="text-[10px] bg-transparent text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 rounded px-1 py-1 outline-none"
-                            >
-                              <option value="expense">支出</option>
-                              <option value="income">収入</option>
-                            </select>
-                            <div className="flex items-center gap-0.5">
-                              <span className="text-[10px] text-zinc-500">¥</span>
+                            {/* 1段目: 項目名を幅いっぱいに (名前が途中で切れないように) */}
+                            <div className="flex items-center gap-1.5">
+                              {event.category === 'income' ? (
+                                <TrendingUp size={12} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                              ) : (
+                                <TrendingDown size={12} className="text-rose-500 flex-shrink-0" />
+                              )}
                               <input
-                                type="number"
-                                value={event.monthlyAmount}
-                                onChange={(e) => updateEvent(year.yearOffset, event.id, { monthlyAmount: Math.max(0, Number(e.target.value) || 0) })}
-                                className="w-16 text-[11px] bg-transparent text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-700 rounded px-1.5 py-1 outline-none focus:ring-1 focus:ring-zinc-400 text-right font-semibold"
+                                type="text"
+                                value={event.label}
+                                onChange={(e) => updateEvent(year.yearOffset, event.id, { label: e.target.value })}
+                                placeholder="項目名"
+                                className="flex-1 min-w-0 text-xs bg-transparent text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-zinc-400"
                               />
-                              <span className="text-[9px] text-zinc-500">/月</span>
+                              {event.source === 'ai' && (
+                                <span className="text-[10px] text-zinc-400 flex-shrink-0" title="AIの提案">✨</span>
+                              )}
+                              <button
+                                onClick={() => removeEvent(year.yearOffset, event.id)}
+                                className="p-1 text-zinc-400 hover:text-rose-500 transition-colors flex-shrink-0"
+                                title="削除"
+                              >
+                                <Trash2 size={12} />
+                              </button>
                             </div>
-                            {event.source === 'ai' && (
-                              <span className="text-[9px] text-zinc-400" title="AI提案">✨</span>
-                            )}
-                            <button
-                              onClick={() => removeEvent(year.yearOffset, event.id)}
-                              className="p-1 text-zinc-400 hover:text-rose-500 transition-colors"
-                              title="削除"
-                            >
-                              <Trash2 size={10} />
-                            </button>
+
+                            {/* 2段目: 種別と金額 */}
+                            <div className="flex items-center gap-1.5 pl-[18px]">
+                              <select
+                                value={event.category}
+                                onChange={(e) => updateEvent(year.yearOffset, event.id, { category: e.target.value as 'income' | 'expense' })}
+                                className="text-[11px] bg-transparent text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 rounded px-1.5 py-1 outline-none"
+                              >
+                                <option value="expense">支出</option>
+                                <option value="income">収入</option>
+                              </select>
+                              <div className="flex items-center gap-1 flex-1">
+                                <span className="text-[11px] text-zinc-500">¥</span>
+                                <input
+                                  type="number"
+                                  value={event.monthlyAmount}
+                                  onChange={(e) => updateEvent(year.yearOffset, event.id, { monthlyAmount: Math.max(0, Number(e.target.value) || 0) })}
+                                  className="flex-1 min-w-0 text-xs bg-transparent text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-zinc-400 text-right font-semibold"
+                                />
+                                <span className="text-[10px] text-zinc-500 flex-shrink-0">/月</span>
+                              </div>
+                            </div>
                           </div>
                         ))}
-
-                        {(totalExpense > 0 || totalIncome > 0) && (
-                          <div className="flex justify-end gap-4 pt-1 text-[10px] text-zinc-500 dark:text-zinc-400">
-                            {totalIncome > 0 && <span className="text-emerald-600 dark:text-emerald-400">+{formatAmount(totalIncome)}/月</span>}
-                            {totalExpense > 0 && <span className="text-rose-600 dark:text-rose-400">-{formatAmount(totalExpense)}/月</span>}
-                          </div>
-                        )}
                       </div>
                     )}
+
+                    {/* 内訳: 基本の投資余力 → 実際の積立額 */}
+                    <div className="mt-3 pt-2.5 border-t border-zinc-200 dark:border-zinc-800 space-y-1 text-[11px]">
+                      <div className="flex justify-between text-zinc-500 dark:text-zinc-400">
+                        <span>基本の投資余力</span>
+                        <span>{formatAmount(amounts.base)}</span>
+                      </div>
+                      {amounts.income > 0 && (
+                        <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                          <span>収入イベント</span>
+                          <span>+{formatAmount(amounts.income)}</span>
+                        </div>
+                      )}
+                      {amounts.expense > 0 && (
+                        <div className="flex justify-between text-rose-600 dark:text-rose-400">
+                          <span>支出イベント</span>
+                          <span>−{formatAmount(amounts.expense)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between pt-1.5 border-t border-zinc-200 dark:border-zinc-800 font-bold text-zinc-900 dark:text-zinc-100">
+                        <span>実際の積立額</span>
+                        <span className={amounts.isShortfall ? 'text-rose-600 dark:text-rose-400' : ''}>
+                          {formatAmount(amounts.effective)}
+                        </span>
+                      </div>
+                      {amounts.isShortfall && (
+                        <p className="text-[10px] text-rose-600 dark:text-rose-400 pt-1 leading-relaxed">
+                          支出が投資余力を超えています。この年は積立0として計算します。
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   {/* Memo */}

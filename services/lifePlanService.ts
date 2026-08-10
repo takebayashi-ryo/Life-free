@@ -6,19 +6,15 @@ interface ChildStage {
   label: string;
   startAge: number;
   endAge: number;
-  // 月額の余剰投資余力の目安 (子供1人あたり)
-  suggestedMonthly: number;
 }
 
 const CHILD_STAGES: ChildStage[] = [
-  { label: '保育園期', startAge: 0,  endAge: 5,  suggestedMonthly: 80000 },
-  { label: '小学生期', startAge: 6,  endAge: 12, suggestedMonthly: 120000 },
-  { label: '中学生期', startAge: 13, endAge: 15, suggestedMonthly: 100000 },
-  { label: '高校生期', startAge: 16, endAge: 18, suggestedMonthly: 80000 },
-  { label: '大学生期', startAge: 19, endAge: 22, suggestedMonthly: 30000 },
+  { label: '保育園期', startAge: 0,  endAge: 5  },
+  { label: '小学生期', startAge: 6,  endAge: 12 },
+  { label: '中学生期', startAge: 13, endAge: 15 },
+  { label: '高校生期', startAge: 16, endAge: 18 },
+  { label: '大学生期', startAge: 19, endAge: 22 },
 ];
-
-const POST_INDEPENDENCE_MONTHLY = 150000;
 
 const getChildStageAt = (childAge: number): ChildStage | null => {
   for (const stage of CHILD_STAGES) {
@@ -27,42 +23,21 @@ const getChildStageAt = (childAge: number): ChildStage | null => {
   return null;
 };
 
-// その年における月積立額の初期推奨値を計算
-const suggestMonthlyForYear = (
-  profile: UserProfile,
-  yearOffset: number,
-  fallbackMonthly: number
-): number => {
-  if (!profile.children || profile.children.length === 0) {
-    return fallbackMonthly;
-  }
-
-  const currentYear = new Date().getFullYear();
-  const targetYear = currentYear + yearOffset;
-
-  // 最も若い子の年齢を基準にライフステージを判定（最も支出が長期化するため）
-  const youngestBirthYear = Math.max(...profile.children.map(c => c.birthYear));
-  const youngestAgeAtYear = targetYear - youngestBirthYear;
-
-  if (youngestAgeAtYear < 0) return fallbackMonthly;
-  if (youngestAgeAtYear >= 23) return POST_INDEPENDENCE_MONTHLY;
-
-  const stage = getChildStageAt(youngestAgeAtYear);
-  return stage ? stage.suggestedMonthly : fallbackMonthly;
-};
-
 export const createEmptyLifePlan = (): LifePlan => ({ years: [] });
 
+// monthlyInvest は「子供関連を除いた投資余力」。年ごとの変動はイベントが担うため、
+// 初期値は全年で同じ値を置く (ここでライフステージ別の値を入れると、
+// イベントの保育料などと二重に差し引かれてしまう)。
 export const createDefaultLifePlan = (
-  profile: UserProfile,
-  fallbackMonthly: number = 80000,
+  _profile: UserProfile,
+  baseMonthly: number = 80000,
   horizonYears: number = DEFAULT_HORIZON_YEARS
 ): LifePlan => {
   const years: LifePlanYear[] = [];
   for (let i = 0; i < horizonYears; i++) {
     years.push({
       yearOffset: i,
-      monthlyInvest: suggestMonthlyForYear(profile, i, fallbackMonthly),
+      monthlyInvest: baseMonthly,
       memo: '',
       events: [],
     });
@@ -72,8 +47,8 @@ export const createDefaultLifePlan = (
 
 export const ensureLifePlanHorizon = (
   plan: LifePlan,
-  profile: UserProfile,
-  fallbackMonthly: number,
+  _profile: UserProfile,
+  baseMonthly: number,
   horizonYears: number = DEFAULT_HORIZON_YEARS
 ): LifePlan => {
   const existingByOffset = new Map(plan.years.map(y => [y.yearOffset, y]));
@@ -85,13 +60,44 @@ export const ensureLifePlanHorizon = (
     } else {
       years.push({
         yearOffset: i,
-        monthlyInvest: suggestMonthlyForYear(profile, i, fallbackMonthly),
+        monthlyInvest: baseMonthly,
         memo: '',
         events: [],
       });
     }
   }
   return { years };
+};
+
+export interface YearAmounts {
+  base: number;
+  income: number;
+  expense: number;
+  /** 収支を反映した実際の積立額。マイナスにはしない */
+  effective: number;
+  /** 収支を引くと積立できない年かどうか */
+  isShortfall: boolean;
+}
+
+export const calcYearAmounts = (year: LifePlanYear): YearAmounts => {
+  const base = Number(year.monthlyInvest) || 0;
+  let income = 0;
+  let expense = 0;
+
+  for (const e of year.events) {
+    const amount = Math.max(0, Number(e.monthlyAmount) || 0);
+    if (e.category === 'income') income += amount;
+    else expense += amount;
+  }
+
+  const raw = base + income - expense;
+  return {
+    base,
+    income,
+    expense,
+    effective: Math.max(0, raw),
+    isShortfall: raw < 0,
+  };
 };
 
 export interface YearContext {
@@ -138,7 +144,7 @@ export const lifePlanToPhases = (plan: LifePlan): Array<{ id: string; startYearO
     .map(y => ({
       id: `lp-${y.yearOffset}`,
       startYearOffset: y.yearOffset,
-      monthlyInvest: y.monthlyInvest,
+      monthlyInvest: calcYearAmounts(y).effective,
       label: `${new Date().getFullYear() + y.yearOffset}年`,
     }));
 };

@@ -136,10 +136,11 @@ function App() {
 
       const resolvedConfig = cloud.config ?? localConfig ?? DEFAULT_CONFIG;
       const resolvedProfile = cloud.profile ?? localProfile ?? DEFAULT_PROFILE;
+      const baseMonthly = resolvedConfig.targetInvestmentBase + resolvedConfig.targetInvestmentAddon;
       const resolvedPlan = ensureLifePlanHorizon(
-        cloud.lifeplan ?? localPlan ?? createDefaultLifePlan(resolvedProfile),
+        cloud.lifeplan ?? localPlan ?? createDefaultLifePlan(resolvedProfile, baseMonthly),
         resolvedProfile,
-        80000
+        baseMonthly
       );
 
       setConfig(resolvedConfig);
@@ -433,7 +434,7 @@ function App() {
   };
 
   const handleResetLifePlan = () => {
-    setLifePlan(createDefaultLifePlan(profile));
+    setLifePlan(createDefaultLifePlan(profile, config.targetInvestmentBase + config.targetInvestmentAddon));
   };
 
   // Common classes
