@@ -17,9 +17,9 @@
 
 | タブ | 内容 |
 |---|---|
-| ホーム | 総資産・先月比・現金目標・最近の記録・戦略フェーズ・プロフィール文脈 |
+| ホーム | 総資産・先月比・現金目標・最近の記録・戦略フェーズ・年齢チップ |
 | 記録 | 月次レポート一覧・CSVエクスポート(月単位)・前月コピー |
-| 予測 | ライフプラン・タイムライン → 資産推移予測グラフ |
+| 予測 | 前提条件 → ライフプラン・タイムライン → 資産推移予測グラフ → 年次表 |
 | 分析 | 資産推移グラフ(総資産/現金/投資/月次投資)・AI質問応答 |
 | 設定 | プロフィール(自分+子供)・テーマ・マスキング・財務パラメータ |
 
@@ -29,8 +29,9 @@
 - **Tailwind CSS** (CDN経由、`darkMode: 'class'`)
 - **Recharts** (グラフ)
 - **Supabase** (月次レコード永続化)
-- **Google Gemini API** (`process.env.API_KEY`) — アドバイス・質問応答・年別イベント提案
-- **Vercel** (ホスティング・自動CI/CD)
+- **Google Gemini API** — アドバイス・質問応答・年別イベント提案
+- **Vercel** (ホスティング・自動デプロイ)
+- **GitHub Actions** (CI: 型チェック + ビルド)
 
 ## ファイル構成
 
@@ -40,7 +41,7 @@ types.ts                    # 型定義 (FinancialConfig, MonthlyRecord, UserPro
 services/
   dataService.ts            # Supabase records CRUD
   simulationService.ts      # 複利計算 (SimulationPhase[] 対応)
-  lifePlanService.ts        # LifePlan生成・SimulationPhaseへの変換
+  lifePlanService.ts        # LifePlan生成・年齢文脈の構築・SimulationPhaseへの変換
   geminiService.ts          # AI (アドバイス・質問応答・年別イベント提案)
 components/
   MonthEditor.tsx           # 月次記録の追加/編集モーダル
@@ -48,6 +49,7 @@ components/
   Simulator.tsx             # 予測タブ全体 (LifePlanTimelineを内包)
   LifePlanTimeline.tsx      # ライフプラン年カードのUI
 .github/workflows/ci.yml    # CI (型チェック + ビルド)
+vite.config.ts              # APIキーを process.env.API_KEY に注入
 index.html                  # Tailwind CDN + darkMode設定
 ```
 
@@ -107,14 +109,14 @@ npm run build       # vite build — バンドル生成
 - Vercel が push を検知して自動デプロイ
 
 ### ローカル経由 (大規模変更のみ)
-1. **ブランチ命名**: `claude/<feature-name>` (例: `claude/lifeplan-timeline`)
+1. **ブランチ命名**: `claude/<feature-name>`
 2. **コミット前**: `npm run typecheck && npm run build` の両方を実行
 3. **プレビュー**: pushするとVercelが2〜3分でデプロイ
-4. **mainへの反映**: `git merge --squash <branch>` → commit → push
+4. **mainへの反映**: `git merge --squash origin/<branch>` → commit → push
 
-## 現在の状態 (最新)
+## 現在の状態
 
-### main ブランチ (本番反映済み)
+### main ブランチ (すべて本番反映済み)
 - 5タブ構成 (ホーム/記録/予測/分析/設定)
 - ライト/ダーク/自動テーマ切替
 - 総資産の先月比表示・記録カード先月比
@@ -122,22 +124,23 @@ npm run build       # vite build — バンドル生成
 - CSV月別ダウンロード (各記録カードに📥ボタン)
 - 起動時の総資産ちらつき修正 (ロード中は `¥—` 表示)
 - 分析グラフに総資産ライン追加
-- ヘッダー簡素化、シミュタブ→「予測」に改名
-- **CI (型チェック + ビルド) 導入**
+- CI (型チェック + ビルド)
+- **プロフィール** (自分の生年 + 子供の名前・生年、複数登録可)
+- **ライフプラン・タイムライン**
+  - 年カードで自分・子供の年齢とライフステージを自動表示
+  - 年ごとに月積立額・想定イベント・メモを編集
+  - Gemini APIで年別収支イベントを提案 (`suggestLifeEvents`)
+  - プロフィールから30年分の初期値を自動生成
+  - デフォルト10年表示、「さらに10年分」で拡張
+- ホーム画面の戦略カードに年齢チップ
 
 ### 未マージのブランチ
-- **`claude/lifeplan-timeline`** ← 3コミット分が未反映
-  1. `a2091e6` ライフステージ別積立モード
-  2. `5ec5c33` プロフィール機能 (自分の生年 + 子供の名前・生年、複数登録可)
-  3. `ef6d316` ライフプラン・タイムライン刷新
-     - 年カードで自分・子供の年齢を自動表示
-     - Gemini APIによる年別収支イベント提案 (`suggestLifeEvents`)
-     - 月積立額・メモ・イベントを年ごとに編集
-     - 旧phases UIを廃止
-  - **動作確認後にmainマージ予定** (特にAI提案がVercel本番で動くか未検証)
+なし (すべて反映済み)
 
 ## 環境変数
-- `API_KEY` — Gemini API key (Vercel環境変数で設定済み)
+- `VITE_GEMINI_API_KEY` または `GEMINI_API_KEY` — Gemini API key
+  - `vite.config.ts` がビルド時に `process.env.API_KEY` へ注入する
+  - Vercelの環境変数で設定済み
 - Supabase接続情報 — `dataService.ts` で参照
 
 ## localStorage キー
@@ -148,23 +151,21 @@ npm run build       # vite build — バンドル生成
 | `lifefree_theme_v1` | テーマ (light/dark/auto) |
 | `lifefree_profile_v1` | ユーザープロフィール |
 | `lifefree_lifeplan_v1` | ライフプランデータ |
-| `lifefree_sim_phases_v1` | (旧) ライフステージphases — timeline導入後は使用停止予定 |
-| `lifefree_sim_use_phases_v1` | (旧) 同上 |
 
 ## 今後の方針
 
 ### iOSリリース (中期目標)
-- Capacitor or React Native への移植、または PWA化
+- PWA化 (manifest.json + Service Worker) → Capacitor or React Native
 - iOS Safe Area 完全対応
 - ホーム画面追加の誘導UI
 - プッシュ通知 (月末リマインド)
 - App Store 対策
 
-### 直近の優先タスク
-- [ ] `claude/lifeplan-timeline` の動作確認 → mainマージ
-- [ ] ホーム画面にライフプラン概観カード追加 (今年のフェーズ・今月の目標額)
-- [ ] AIアドバイスにライフプラン情報を含める (現在は月次単位のみ)
-- [ ] PWA対応 (manifest.json + Service Worker) — iOS化の第一歩
+### 直近の候補タスク
+- [ ] ホーム画面にライフプラン概観カード (今年のフェーズ・今月の目標積立額)
+- [ ] AIアドバイスにライフプラン文脈を注入 (現在は月次データのみ参照)
+- [ ] PWA対応 — iOS化の第一歩
+- [ ] バンドルサイズ削減 (現在1.1MB / gzip 296KB。rechartsが重い)
 
 ## コーディング規約
 
