@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Plus, Settings, Wallet, Target, Calculator,
   Trash2, Send, User, Bot, Eye, EyeOff,
@@ -12,6 +12,7 @@ import MonthEditor from './components/MonthEditor';
 import Simulator from './components/Simulator';
 import { calculateSimulation } from './services/simulationService';
 import { loadRecords, upsertRecord, deleteRecord } from './services/dataService';
+import { loadAllSettings, saveSetting, SettingKey } from './services/settingsService';
 import { generateDashboardAnswer } from './services/geminiService';
 
 const STORAGE_KEY_CONFIG = 'assetflow_config_v1';
@@ -37,6 +38,36 @@ function applyTheme(mode: ThemeMode) {
   document.documentElement.classList.toggle('dark', isDark);
 }
 
+function readLocal<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+// クラウド保存はキー入力のたびに走らせず、一定時間まとめてから1回だけ送る。
+// 読み込み直後の1回はスキップする — ここで送ると、データを持たない端末の初期値が
+// クラウドを上書きし、他端末の実データを消してしまう。
+function useCloudSync<T>(key: SettingKey, localKey: string, value: T, enabled: boolean) {
+  const skipNext = useRef(true);
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    localStorage.setItem(localKey, JSON.stringify(value));
+
+    if (skipNext.current) {
+      skipNext.current = false;
+      return;
+    }
+
+    const timer = setTimeout(() => { saveSetting(key, value); }, 800);
+    return () => clearTimeout(timer);
+  }, [key, localKey, value, enabled]);
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [config, setConfig] = useState<FinancialConfig>(DEFAULT_CONFIG);
@@ -44,6 +75,7 @@ function App() {
   const [lifePlan, setLifePlan] = useState<LifePlan>(() => createDefaultLifePlan(DEFAULT_PROFILE));
   const [records, setRecords] = useState<MonthlyRecord[]>([]);
   const [isLoadingRecords, setIsLoadingRecords] = useState(true);
+  const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<MonthlyRecord | undefined>(undefined);
   const [prefillRecord, setPrefillRecord] = useState<MonthlyRecord | undefined>(undefined);
@@ -83,21 +115,46 @@ function App() {
     }).catch(() => {
       setIsLoadingRecords(false);
     });
+  }, []);
 
-    const savedConfig = localStorage.getItem(STORAGE_KEY_CONFIG);
-    if (savedConfig) {
-      setConfig(JSON.parse(savedConfig));
-    }
+  // 設定はクラウド優先。クラウドが空でローカルに残っていれば移行する
+  useEffect(() => {
+    let cancelled = false;
 
-    const savedProfile = localStorage.getItem(STORAGE_KEY_PROFILE);
-    if (savedProfile) {
-      setProfile(JSON.parse(savedProfile));
-    }
+    (async () => {
+      const localConfig = readLocal<FinancialConfig>(STORAGE_KEY_CONFIG);
+      const localProfile = readLocal<UserProfile>(STORAGE_KEY_PROFILE);
+      const localPlan = readLocal<LifePlan>(STORAGE_KEY_LIFEPLAN);
 
-    const savedLifePlan = localStorage.getItem(STORAGE_KEY_LIFEPLAN);
-    if (savedLifePlan) {
-      setLifePlan(JSON.parse(savedLifePlan));
-    }
+      // クラウド応答前にローカル値で描画しておく (体感速度とオフライン耐性)
+      if (localConfig) setConfig(localConfig);
+      if (localProfile) setProfile(localProfile);
+      if (localPlan) setLifePlan(localPlan);
+
+      const cloud = await loadAllSettings<UserProfile, LifePlan, FinancialConfig>();
+      if (cancelled) return;
+
+      const resolvedConfig = cloud.config ?? localConfig ?? DEFAULT_CONFIG;
+      const resolvedProfile = cloud.profile ?? localProfile ?? DEFAULT_PROFILE;
+      const resolvedPlan = ensureLifePlanHorizon(
+        cloud.lifeplan ?? localPlan ?? createDefaultLifePlan(resolvedProfile),
+        resolvedProfile,
+        80000
+      );
+
+      setConfig(resolvedConfig);
+      setProfile(resolvedProfile);
+      setLifePlan(resolvedPlan);
+
+      // クラウド未保存のものだけ引き上げる
+      if (!cloud.config && localConfig) saveSetting('config', localConfig);
+      if (!cloud.profile && localProfile) saveSetting('profile', localProfile);
+      if (!cloud.lifeplan && localPlan) saveSetting('lifeplan', resolvedPlan);
+
+      setIsSettingsLoaded(true);
+    })();
+
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -108,23 +165,10 @@ function App() {
     }
   }, [isEditorOpen]);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(config));
-  }, [config]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(profile));
-  }, [profile]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_LIFEPLAN, JSON.stringify(lifePlan));
-  }, [lifePlan]);
-
-  // Ensure the life plan has the right horizon (in case profile changes shift defaults)
-  useEffect(() => {
-    setLifePlan(prev => ensureLifePlanHorizon(prev, profile, 80000));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // 読み込み完了前に走らせると初期値でクラウドを上書きしてしまうため isSettingsLoaded で止める
+  useCloudSync('config', STORAGE_KEY_CONFIG, config, isSettingsLoaded);
+  useCloudSync('profile', STORAGE_KEY_PROFILE, profile, isSettingsLoaded);
+  useCloudSync('lifeplan', STORAGE_KEY_LIFEPLAN, lifePlan, isSettingsLoaded);
 
   const sortedRecords = useMemo(() => {
     return [...records].sort((a, b) => a.id.localeCompare(b.id));

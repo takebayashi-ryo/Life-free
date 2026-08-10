@@ -42,6 +42,7 @@ services/
   dataService.ts            # Supabase records CRUD
   simulationService.ts      # 複利計算 (SimulationPhase[] 対応)
   lifePlanService.ts        # LifePlan生成・年齢文脈の構築・SimulationPhaseへの変換
+  settingsService.ts        # app_settings テーブルへの設定の読み書き
   geminiService.ts          # AI (アドバイス・質問応答・年別イベント提案)
 components/
   MonthEditor.tsx           # 月次記録の追加/編集モーダル
@@ -143,14 +144,32 @@ npm run build       # vite build — バンドル生成
   - Vercelの環境変数で設定済み
 - Supabase接続情報 — `dataService.ts` で参照
 
-## localStorage キー
-| Key | 用途 |
+## データの保存先
+
+### Supabase (端末をまたいで同期)
+| テーブル | 内容 |
 |---|---|
-| `assetflow_config_v1` | 財務パラメータ (給与、保育料等) |
-| `assetflow_sim_cases_v1` | シミュレーターの保存ケース |
-| `lifefree_theme_v1` | テーマ (light/dark/auto) |
-| `lifefree_profile_v1` | ユーザープロフィール |
-| `lifefree_lifeplan_v1` | ライフプランデータ |
+| `monthly_records` | 月次記録 |
+| `app_settings` | key-value形式。`profile` / `lifeplan` / `config` の3キー |
+
+`supabase/app_settings.sql` にテーブル定義あり (SQL Editorで一度だけ実行)。
+
+### localStorage
+| Key | 用途 | 同期 |
+|---|---|---|
+| `assetflow_config_v1` | 財務パラメータ | クラウドのキャッシュ |
+| `lifefree_profile_v1` | プロフィール | クラウドのキャッシュ |
+| `lifefree_lifeplan_v1` | ライフプラン | クラウドのキャッシュ |
+| `lifefree_theme_v1` | テーマ | **端末ごと (意図的)** |
+| `assetflow_sim_cases_v1` | シミュレーターの保存ケース | 端末ごと (未対応) |
+
+### 同期の設計 (App.tsx)
+1. 起動時、まずlocalStorageの値で描画 → その後クラウドの値で上書き
+2. クラウドが空でlocalStorageに値があれば、クラウドへ引き上げる (移行)
+3. 変更は800msまとめてからクラウドへ送る (`useCloudSync`)
+4. **読み込み直後の1回は保存をスキップする** — データを持たない端末の初期値で
+   クラウドを上書きし、他端末の実データを消すのを防ぐため
+5. クラウドに繋がらなくてもlocalStorageで動作し続ける
 
 ## 今後の方針
 
@@ -162,6 +181,8 @@ npm run build       # vite build — バンドル生成
 - App Store 対策
 
 ### 直近の候補タスク
+- [ ] ライフプランのイベント合計を積立額の計算に反映させる (現在は表示のみ)
+- [ ] イベント項目名の入力欄が狭く、名前が途中で切れる
 - [ ] ホーム画面にライフプラン概観カード (今年のフェーズ・今月の目標積立額)
 - [ ] AIアドバイスにライフプラン文脈を注入 (現在は月次データのみ参照)
 - [ ] PWA対応 — iOS化の第一歩
