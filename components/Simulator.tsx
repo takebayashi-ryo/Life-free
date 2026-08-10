@@ -22,6 +22,8 @@ interface SimulatorProps {
   lifePlan: LifePlan;
   onLifePlanChange: (plan: LifePlan) => void;
   onResetLifePlan: () => void;
+  /** 直近の月次記録での実際の投資額。基本の投資余力を逆算するのに使う */
+  actualMonthlyInvest?: number;
 }
 
 function useIsDark() {
@@ -38,7 +40,7 @@ function useIsDark() {
 
 const Simulator: React.FC<SimulatorProps> = ({
   initialCash, initialInvest, sharedRate, onSharedChange, isMasked = false,
-  profile, lifePlan, onLifePlanChange, onResetLifePlan,
+  profile, lifePlan, onLifePlanChange, onResetLifePlan, actualMonthlyInvest,
 }) => {
   const isDark = useIsDark();
 
@@ -282,6 +284,7 @@ const Simulator: React.FC<SimulatorProps> = ({
           onChange={onLifePlanChange}
           onResetFromProfile={onResetLifePlan}
           isMasked={isMasked}
+          actualMonthlyInvest={actualMonthlyInvest}
         />
       </div>
 

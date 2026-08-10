@@ -1096,6 +1096,7 @@ function App() {
               lifePlan={lifePlan}
               onLifePlanChange={setLifePlan}
               onResetLifePlan={handleResetLifePlan}
+              actualMonthlyInvest={latestHistory ? latestHistory.investmentTrust : undefined}
             />
           </div>
         )}

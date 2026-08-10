@@ -10,13 +10,15 @@ interface LifePlanTimelineProps {
   onChange: (plan: LifePlan) => void;
   onResetFromProfile: () => void;
   isMasked?: boolean;
+  /** 直近の月次記録での実際の投資額 */
+  actualMonthlyInvest?: number;
 }
 
 const MASK = '✳︎✳︎✳︎✳︎✳︎✳︎';
 const DEFAULT_VISIBLE = 10;
 
 const LifePlanTimeline: React.FC<LifePlanTimelineProps> = ({
-  profile, plan, onChange, onResetFromProfile, isMasked = false,
+  profile, plan, onChange, onResetFromProfile, isMasked = false, actualMonthlyInvest,
 }) => {
   const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set([0]));
   const [visibleCount, setVisibleCount] = useState(DEFAULT_VISIBLE);
@@ -122,6 +124,23 @@ const LifePlanTimeline: React.FC<LifePlanTimelineProps> = ({
     }
   };
 
+  // 実績の投資額は「子供の費用を払ったあと」の金額。今年のイベントを足し戻すと
+  // 子供の費用を除いた投資余力になる。これを全年の基本額として置き直す。
+  const thisYear = sortedYears.find(y => y.yearOffset === 0);
+  const calibratedBase = (() => {
+    if (actualMonthlyInvest === undefined || !thisYear) return null;
+    const a = calcYearAmounts(thisYear);
+    return Math.max(0, Math.round(actualMonthlyInvest - a.income + a.expense));
+  })();
+
+  const handleCalibrate = () => {
+    if (calibratedBase === null) return;
+    onChange({
+      ...plan,
+      years: plan.years.map(y => ({ ...y, monthlyInvest: calibratedBase })),
+    });
+  };
+
   const formatAmount = (n: number) => isMasked ? MASK : `¥${n.toLocaleString()}`;
 
   const profileSet = profile.selfBirthYear !== undefined || profile.children.length > 0;
@@ -163,6 +182,25 @@ const LifePlanTimeline: React.FC<LifePlanTimelineProps> = ({
           </div>
         </div>
       </div>
+
+      {calibratedBase !== null && calibratedBase !== thisYear?.monthlyInvest && (
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="text-[11px] text-zinc-600 dark:text-zinc-300 leading-relaxed min-w-0">
+              直近の実績では月 <strong className="text-zinc-900 dark:text-zinc-100">{formatAmount(actualMonthlyInvest ?? 0)}</strong> 投資しています。
+              今年の出入りから逆算すると、①基本の投資余力は
+              <strong className="text-zinc-900 dark:text-zinc-100"> {formatAmount(calibratedBase)}</strong> です。
+            </div>
+            <button
+              onClick={handleCalibrate}
+              className="text-[10px] bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 px-2.5 py-1.5 rounded-lg font-medium hover:opacity-80 transition-opacity flex-shrink-0"
+              title="全ての年の基本の投資余力をこの金額にそろえる"
+            >
+              全年に反映
+            </button>
+          </div>
+        </div>
+      )}
 
       {!profileSet && (
         <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl p-3 flex items-start gap-2">
