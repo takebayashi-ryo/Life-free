@@ -18,7 +18,7 @@
 | タブ | 内容 |
 |---|---|
 | ホーム | 総資産・先月比・現金目標・最近の記録・戦略フェーズ・年齢チップ |
-| 記録 | 月次レポート一覧・CSVエクスポート(月単位)・前月コピー |
+| 記録 | 月次レポート一覧・note記事の下書き生成・CSVエクスポート(月単位)・前月コピー |
 | 予測 | 前提条件 → ライフプラン・タイムライン → 資産推移予測グラフ → 年次表 |
 | 分析 | 資産推移グラフ(総資産/現金/投資/月次投資)・AI質問応答 |
 | 設定 | プロフィール(自分+子供)・テーマ・マスキング・財務パラメータ |
@@ -43,12 +43,14 @@ services/
   simulationService.ts      # 複利計算 (SimulationPhase[] 対応)
   lifePlanService.ts        # LifePlan生成・年齢文脈の構築・SimulationPhaseへの変換
   settingsService.ts        # app_settings テーブルへの設定の読み書き
+  noteArticleService.ts     # note記事の組み立て (金額はここで確実に埋める)
   geminiService.ts          # AI (アドバイス・質問応答・年別イベント提案)
 components/
   MonthEditor.tsx           # 月次記録の追加/編集モーダル
   AnalysisChart.tsx         # 資産推移グラフ (分析タブ用)
   Simulator.tsx             # 予測タブ全体 (LifePlanTimelineを内包)
   LifePlanTimeline.tsx      # ライフプラン年カードのUI
+  NoteArticleModal.tsx      # note記事の下書き表示・コピー
 .github/workflows/ci.yml    # CI (型チェック + ビルド)
 vite.config.ts              # APIキーを process.env.API_KEY に注入
 index.html                  # Tailwind CDN + darkMode設定
@@ -188,6 +190,19 @@ npm run build       # vite build — バンドル生成
 - ホーム画面追加の誘導UI
 - プッシュ通知 (月末リマインド)
 - App Store 対策
+
+### note記事の自動生成 (2026-08 追加)
+
+記録タブの各月カードの📝ボタンから、資産公開記事の下書きを作れる。
+
+- **金額はコードで埋める** (`noteArticleService.ts`)。AIには一切数字を書かせない
+  — 桁の取り違えや勝手な丸めが起きると、公開記事として致命的になるため
+- AIが書くのは地の文だけ (`generateNoteCommentary`)。
+  プロンプトで「金額の数字は書かない」と明示している
+- 冒頭の自己紹介は設定タブの「note記事のプロフィール」から。
+  年齢・家族の人数はプロフィール欄から自動計算するので二重入力しない
+- note には投稿用の公開APIが無い (2026年4月時点、公開予定も未定)。
+  非公式APIはアカウント停止リスクがあるため使わない。コピーして手で貼る運用
 
 ### 直近の候補タスク
 - [ ] ホーム画面にライフプラン概観カード (今年のフェーズ・今月の目標積立額)

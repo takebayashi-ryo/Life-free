@@ -215,3 +215,106 @@ export const suggestLifeEvents = async (input: YearSuggestionInput): Promise<Yea
     throw error;
   }
 };
+export interface NoteCommentaryInput {
+  monthLabel: string;        // 例: 2026年3月
+  totalAssets: number;
+  totalAssetsDiff: number | null;
+  cash: number;
+  invest: number;
+  targetCash: number;
+  salaryIncome: number;
+  sideHustleIncome: number;
+  prevSideHustleIncome: number | null;
+  childAllowanceIncome: number;
+  nurseryExpense: number;
+  creditCardExpense: number;
+  pocketMoneyExpense: number;
+  pocketMoneyTarget: number;
+  recentPocketMoney: Array<{ month: string; amount: number }>;
+  investmentTrust: number;
+  targetInvest: number;
+  cashFlow: number;
+}
+
+// 記事の「地の文」だけをAIに書かせる。金額はアプリ側で埋めるため、
+// ここで数値を出力させると二重表示や桁の取り違えが起きる。
+export const generateNoteCommentary = async (input: NoteCommentaryInput) => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  const pocketHistory = input.recentPocketMoney
+    .map(p => `${p.month}: ${p.amount.toLocaleString()}円`)
+    .join(' / ');
+
+  const prompt = `
+あなたは家計・資産形成を発信するブロガー本人です。${input.monthLabel}の資産公開記事に添える
+コメント文だけを書いてください。
+
+【今月の状況】
+- 総資産: ${input.totalAssets.toLocaleString()}円 ${input.totalAssetsDiff !== null ? `(先月比 ${input.totalAssetsDiff >= 0 ? '+' : ''}${input.totalAssetsDiff.toLocaleString()}円)` : ''}
+- 現金: ${input.cash.toLocaleString()}円 / 生活防衛資金の目標: ${input.targetCash.toLocaleString()}円
+- 投資信託: ${input.invest.toLocaleString()}円
+- 給与: ${input.salaryIncome.toLocaleString()}円
+- 副業: ${input.sideHustleIncome.toLocaleString()}円 ${input.prevSideHustleIncome !== null ? `(先月 ${input.prevSideHustleIncome.toLocaleString()}円)` : ''}
+- 児童手当: ${input.childAllowanceIncome.toLocaleString()}円
+- 保育園: ${input.nurseryExpense.toLocaleString()}円
+- カード(生活費): ${input.creditCardExpense.toLocaleString()}円
+- お小遣い: ${input.pocketMoneyExpense.toLocaleString()}円 (上限の設定は ${input.pocketMoneyTarget.toLocaleString()}円)
+- お小遣いの推移: ${pocketHistory}
+- 投資額: ${input.investmentTrust.toLocaleString()}円 (目標 ${input.targetInvest.toLocaleString()}円)
+- 現金収支: ${input.cashFlow >= 0 ? '+' : ''}${input.cashFlow.toLocaleString()}円
+
+【出力フォーマット】
+以下のJSONだけを返してください。前置き・説明・コードブロックは不要です。
+
+{
+  "assetComment": "",
+  "incomeComment": "",
+  "sideJobComment": "",
+  "expenseComment": "",
+  "balanceComment": "",
+  "topicHeading": "",
+  "topicBody": "",
+  "closing": ""
+}
+
+【書き方のルール】
+1. ですます調。読者に語りかける個人ブログの文体
+2. 各コメントは1〜3文。短く
+3. 絵文字は多くて1つ。🎉✅😅 程度にとどめる。無くてもよい
+4. **金額の数字は書かない**。金額はアプリ側で表を作るので、
+   ここで書くと重複する。「目標を大きく超えました」のように言葉で表現する
+5. 良くない月は正直に書く。無理に前向きにまとめない
+6. topicHeading はその月で一番語る価値のある一点。
+   例:「お小遣いが目標を大きく超えました」「投資額を守り切れた月」
+   topicBody はその掘り下げを2〜4文で
+7. closing は記事全体の締め。翌月への一言を含める
+8. 誇張しない。断定しすぎない
+`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+    });
+    const text = response.text || '';
+    const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('JSON not found');
+
+    const p = JSON.parse(match[0]);
+    const s = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+    return {
+      assetComment: s(p.assetComment),
+      incomeComment: s(p.incomeComment),
+      sideJobComment: s(p.sideJobComment),
+      expenseComment: s(p.expenseComment),
+      balanceComment: s(p.balanceComment),
+      topicHeading: s(p.topicHeading),
+      topicBody: s(p.topicBody),
+      closing: s(p.closing),
+    };
+  } catch (error) {
+    console.error('Gemini API Error (note commentary):', error);
+    throw error;
+  }
+};

@@ -83,6 +83,23 @@ export interface LifePlan {
   years: LifePlanYear[];  // sorted by yearOffset
 }
 
+/** note記事の冒頭に毎回入る固定プロフィール */
+export interface NoteProfile {
+  penName: string;        // 例: おりょう
+  intro: string;          // 例: このブログでは...
+  background: string;     // 例: もともとは町工場で働いていて...
+  goal: string;           // 例: お金の不安を減らして人生に余白を作る
+  sideJobName: string;    // 例: AI企業のカスタマーサクセス（CS）
+}
+
+export const DEFAULT_NOTE_PROFILE: NoteProfile = {
+  penName: '',
+  intro: '・家計管理 ・資産形成 ・副業 ・AI活用',
+  background: '',
+  goal: 'お金の不安を減らして人生に余白を作る',
+  sideJobName: '',
+};
+
 export const DEFAULT_CONFIG: FinancialConfig = {
   baseSalary: 450000,
   nurseryFee: 24000,

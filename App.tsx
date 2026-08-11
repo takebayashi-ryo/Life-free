@@ -3,9 +3,11 @@ import {
   Plus, Settings, Wallet, Target, Calculator,
   Trash2, Send, User, Bot, Eye, EyeOff,
   Home, BookOpen, BarChart3, ChevronRight, Edit3, PiggyBank,
-  Copy, TrendingUp, TrendingDown, Sun, Moon, Smartphone, Download
+  Copy, TrendingUp, TrendingDown, Sun, Moon, Smartphone, Download, FileText
 } from 'lucide-react';
-import { MonthlyRecord, FinancialConfig, DEFAULT_CONFIG, UserProfile, DEFAULT_PROFILE, ChildProfile, LifePlan } from './types';
+import { MonthlyRecord, FinancialConfig, DEFAULT_CONFIG, UserProfile, DEFAULT_PROFILE, ChildProfile, LifePlan, NoteProfile, DEFAULT_NOTE_PROFILE } from './types';
+import NoteArticleModal from './components/NoteArticleModal';
+import { MilestoneRow } from './services/noteArticleService';
 import { createDefaultLifePlan, ensureLifePlanHorizon } from './services/lifePlanService';
 import AnalysisChart from './components/AnalysisChart';
 import MonthEditor from './components/MonthEditor';
@@ -19,6 +21,7 @@ const STORAGE_KEY_CONFIG = 'assetflow_config_v1';
 const STORAGE_KEY_THEME = 'lifefree_theme_v1';
 const STORAGE_KEY_PROFILE = 'lifefree_profile_v1';
 const STORAGE_KEY_LIFEPLAN = 'lifefree_lifeplan_v1';
+const STORAGE_KEY_NOTEPROFILE = 'lifefree_noteprofile_v1';
 
 type Tab = 'home' | 'records' | 'simulator' | 'analysis' | 'settings';
 type ThemeMode = 'light' | 'dark' | 'auto';
@@ -76,6 +79,8 @@ function App() {
   const [records, setRecords] = useState<MonthlyRecord[]>([]);
   const [isLoadingRecords, setIsLoadingRecords] = useState(true);
   const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
+  const [noteProfile, setNoteProfile] = useState<NoteProfile>(() => readLocal<NoteProfile>(STORAGE_KEY_NOTEPROFILE) ?? DEFAULT_NOTE_PROFILE);
+  const [noteArticleRecord, setNoteArticleRecord] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<MonthlyRecord | undefined>(undefined);
   const [prefillRecord, setPrefillRecord] = useState<MonthlyRecord | undefined>(undefined);
@@ -171,6 +176,10 @@ function App() {
   useCloudSync('profile', STORAGE_KEY_PROFILE, profile, isSettingsLoaded);
   useCloudSync('lifeplan', STORAGE_KEY_LIFEPLAN, lifePlan, isSettingsLoaded);
 
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_NOTEPROFILE, JSON.stringify(noteProfile));
+  }, [noteProfile]);
+
   const sortedRecords = useMemo(() => {
     return [...records].sort((a, b) => a.id.localeCompare(b.id));
   }, [records]);
@@ -235,6 +244,16 @@ function App() {
   }, [currentCash, currentInvestTotal, simMonthlyInvest, simRate]);
 
   const cashGap = config.targetCash - currentCash;
+
+  const noteMilestones: MilestoneRow[] = useMemo(() => {
+    const m = simulationResult.milestones;
+    const fmt = (d: Date | null) => d ? `${d.getFullYear()}年${d.getMonth() + 1}月` : '30年以内には未到達';
+    return [
+      { label: '1,000万円', achieved: fmt(m.m1000) },
+      { label: '3,000万円', achieved: fmt(m.m3000) },
+      { label: '5,000万円', achieved: fmt(m.m5000) },
+    ];
+  }, [simulationResult]);
 
   const formatYen = (value: number) => {
     if (isMasked) return MASK;
@@ -724,6 +743,14 @@ function App() {
                     </div>
                     <div className="flex items-center gap-0.5 -mr-1">
                       <button
+                        onClick={() => setNoteArticleRecord(record.id)}
+                        className="p-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                        title="この月のnote記事の下書きを作る"
+                        aria-label="note記事"
+                      >
+                        <FileText size={15} />
+                      </button>
+                      <button
                         onClick={() => handleExportRecord(record)}
                         className="p-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 rounded-lg transition-colors"
                         title="この月のデータをCSVでダウンロード"
@@ -973,6 +1000,49 @@ function App() {
           </div>
         </div>
 
+        {/* note profile */}
+        <div className={`${cardClass} p-5`}>
+          <div className={`text-[11px] font-semibold ${subtleText} mb-1 uppercase tracking-wider`}>note記事のプロフィール</div>
+          <p className={`text-[11px] ${subtleText} mb-4 leading-relaxed`}>
+            記録タブの各月から作れる下書きの、冒頭に毎回入る文章です。
+          </p>
+
+          <div className="space-y-4">
+            {([
+              { key: 'penName', label: 'ペンネーム', placeholder: 'おりょう', multiline: false },
+              { key: 'intro', label: '発信テーマ', placeholder: '・家計管理 ・資産形成 ・副業 ・AI活用', multiline: true },
+              { key: 'background', label: '経歴・自己紹介', placeholder: 'もともとは町工場で働いていて、20代後半まで年収は370万円でしたが、転職をきっかけに現在は年収770万円になりました。', multiline: true },
+              { key: 'goal', label: '目標', placeholder: 'お金の不安を減らして人生に余白を作る', multiline: false },
+              { key: 'sideJobName', label: '副業の内容', placeholder: 'AI企業のカスタマーサクセス（CS）', multiline: false },
+            ] as const).map(f => (
+              <div key={f.key}>
+                <label className={`block text-sm font-medium ${primaryText} mb-1.5`}>{f.label}</label>
+                {f.multiline ? (
+                  <textarea
+                    value={noteProfile[f.key]}
+                    onChange={(e) => setNoteProfile(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    placeholder={f.placeholder}
+                    rows={3}
+                    className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2.5 text-zinc-900 dark:text-zinc-100 text-sm focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:border-transparent outline-none transition-colors resize-none"
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    value={noteProfile[f.key]}
+                    onChange={(e) => setNoteProfile(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    placeholder={f.placeholder}
+                    className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2.5 text-zinc-900 dark:text-zinc-100 text-sm focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:border-transparent outline-none transition-colors"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+
+          <p className={`text-[10px] ${subtleText} mt-4 leading-relaxed`}>
+            年齢・家族の人数はプロフィール欄から自動で入るため、ここには書かないでください。
+          </p>
+        </div>
+
         {/* Theme */}
         <div className={`${cardClass} p-5`}>
           <div className={`text-[11px] font-semibold ${subtleText} mb-3 uppercase tracking-wider`}>テーマ</div>
@@ -1140,6 +1210,22 @@ function App() {
           })}
         </div>
       </nav>
+
+      {noteArticleRecord && (() => {
+        const target = historyData.find(h => h.id === noteArticleRecord);
+        if (!target) return null;
+        return (
+          <NoteArticleModal
+            record={target}
+            history={historyData}
+            config={config}
+            profile={profile}
+            noteProfile={noteProfile}
+            milestones={noteMilestones}
+            onClose={() => setNoteArticleRecord(null)}
+          />
+        );
+      })()}
 
       {isEditorOpen && (
         <MonthEditor
