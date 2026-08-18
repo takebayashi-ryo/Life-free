@@ -52,6 +52,8 @@ components/
   LifePlanTimeline.tsx      # ライフプラン年カードのUI
   NoteArticleModal.tsx      # note記事の下書き表示・コピー
 .github/workflows/ci.yml    # CI (型チェック + ビルド)
+.claude/skills/release/     # /release — 検証からmain反映までの手順
+.claude/settings.json       # 検証コマンドの実行許可
 vite.config.ts              # APIキーを process.env.API_KEY に注入
 index.html                  # Tailwind CDN + darkMode設定
 ```
@@ -104,6 +106,12 @@ npm run build       # vite build — バンドル生成
 - **GitHub MCP経由で直接編集した場合も、このCIが安全網になります**
 
 ## 開発ワークフロー
+
+### `/release` を使う
+検証 → コミット → push → CI確認 → CLAUDE.md更新 までを一続きで行う Skill を
+`.claude/skills/release/` に置いてある。「リリースして」で呼び出せる。
+手順を思い出しながら並べるのではなく、この Skill に従うこと。
+
 
 ### 優先: GitHub MCP経由での直接編集 (推奨)
 - 小〜中規模の変更: `mcp__github__create_or_update_file` / `push_files` で直接リモート書き換え
