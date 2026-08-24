@@ -15,6 +15,7 @@ import Simulator from './components/Simulator';
 import { calculateSimulation } from './services/simulationService';
 import { loadRecords, upsertRecord, deleteRecord } from './services/dataService';
 import { loadAllSettings, saveSetting, SettingKey } from './services/settingsService';
+import { saveSharedProfile } from './services/sharedProfileService';
 import { generateDashboardAnswer } from './services/geminiService';
 
 const STORAGE_KEY_CONFIG = 'assetflow_config_v1';
@@ -69,6 +70,25 @@ function useCloudSync<T>(key: SettingKey, localKey: string, value: T, enabled: b
     const timer = setTimeout(() => { saveSetting(key, value); }, 800);
     return () => clearTimeout(timer);
   }, [key, localKey, value, enabled]);
+}
+
+// 記録・プロフィール・ライフプランのどれかが変わったら、他部署のAIが読む
+// 共有プロフィールを書き直す。useCloudSync と同じく、読み込み完了前は走らせない。
+function useSharedProfileSync(
+  records: MonthlyRecord[],
+  profile: UserProfile,
+  lifePlan: LifePlan,
+  config: FinancialConfig,
+  enabled: boolean
+) {
+  useEffect(() => {
+    if (!enabled) return;
+
+    const timer = setTimeout(() => {
+      saveSharedProfile(records, profile, lifePlan, config);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [records, profile, lifePlan, config, enabled]);
 }
 
 function App() {
@@ -175,6 +195,10 @@ function App() {
   useCloudSync('config', STORAGE_KEY_CONFIG, config, isSettingsLoaded);
   useCloudSync('profile', STORAGE_KEY_PROFILE, profile, isSettingsLoaded);
   useCloudSync('lifeplan', STORAGE_KEY_LIFEPLAN, lifePlan, isSettingsLoaded);
+
+  // 他部署のAIが読む共有プロフィールを最新に保つ。
+  // 手動エクスポートだと押し忘れて古い情報で回答されるため自動更新にする。
+  useSharedProfileSync(records, profile, lifePlan, config, isSettingsLoaded && !isLoadingRecords);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_NOTEPROFILE, JSON.stringify(noteProfile));

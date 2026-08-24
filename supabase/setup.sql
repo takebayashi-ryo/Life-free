@@ -86,7 +86,35 @@ CREATE POLICY "app_settings_anon_all"
   ON app_settings FOR ALL TO anon USING (true) WITH CHECK (true);
 
 -- --------------------------------------------
--- 3. 重複ポリシーの掃除
+-- 3. shared_profile (他エージェントへ渡す要約プロフィール)
+--
+-- life free が「財務・家計部」として、月次記録・プロフィール・
+-- ライフプランから要約を生成して書き出す。読み手は他部署のAI
+-- (不動産・資産部のナスビなど)。
+--
+-- scope は 'public' / 'financial' の2種類:
+--   public    … 年齢・子どもの年齢・ライフステージ。金額を一切含まない
+--   financial … 資産額・キャッシュフロー・積立計画。金額を含む
+--
+-- ⚠️ 現状 RLS は anon 全許可なので、この分割は DB レベルの
+--    アクセス制御ではなく「どの部署がどちらを読むか」という
+--    アプリ側の取り決め。認証を入れる際に scope 単位で締めること。
+-- --------------------------------------------
+
+CREATE TABLE IF NOT EXISTS shared_profile (
+  scope      TEXT PRIMARY KEY,   -- 'public' | 'financial'
+  data       JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE shared_profile ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "shared_profile_anon_all" ON shared_profile;
+CREATE POLICY "shared_profile_anon_all"
+  ON shared_profile FOR ALL TO anon USING (true) WITH CHECK (true);
+
+-- --------------------------------------------
+-- 4. 重複ポリシーの掃除
 --
 -- 過去に public ロール向けの同等ポリシーが別名で作られていた。
 -- anon 向けと二重になっているだけで機能上の意味はないため削除する。
