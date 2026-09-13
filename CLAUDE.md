@@ -4,8 +4,9 @@
 
 ## プロジェクト概要
 
-> ⚠️ **機能追加やLPを書く前に [`docs/positioning.md`](docs/positioning.md) を必ず読むこと。**
-> 誰に何を売るのかが書いてある。ここが揺れると全部が揺れる。
+> ⚠️ **機能追加やLPを書く前に、この2つを必ず読むこと。**
+> - [`docs/positioning.md`](docs/positioning.md) — **誰に何を売るのか**。ここが揺れると全部が揺れる
+> - [`docs/app-concept.md`](docs/app-concept.md) — **では具体的に何を作るのか**。診断/計画/記録の3層と教育費の基準値
 
 **ターゲット**: **0〜7歳の子がいる親／これから子を持つ人**
 **解く問題**: 「ぼんやりお金がかかるのは分かるが、何年後に何にいくらかかるか分からない」を、
@@ -58,6 +59,12 @@ components/
   Simulator.tsx             # 予測タブ全体 (LifePlanTimelineを内包)
   LifePlanTimeline.tsx      # ライフプラン年カードのUI
   NoteArticleModal.tsx      # note記事の下書き表示・コピー
+docs/
+  positioning.md            # 誰に何を売るか + 検証の進め方
+  app-concept.md            # アプリの再定義 (ピーク年診断) + 教育費の基準値
+lp/
+  index.html                # LP。診断ロジック内蔵の1枚もの。本体とは独立・依存なし
+  README.md                 # Formspree / Netlify Drop の手順
 .github/workflows/ci.yml    # CI (型チェック + ビルド)
 .claude/skills/release/     # /release — 検証からmain反映までの手順
 .claude/settings.json       # 検証コマンドの実行許可
@@ -220,8 +227,14 @@ npm run build       # vite build — バンドル生成
   非公式APIはアカウント停止リスクがあるため使わない。コピーして手で貼る運用
 
 ### 直近の候補タスク
-- [ ] **LPを作って note で需要検証**（最優先。半日。詳細は docs/positioning.md）
-- [ ] 初回体験の作り直し（入力3つで30秒以内に予測を出す）
+
+**いまは検証フェーズ。アプリ本体の機能追加は止めている**（理由: docs/positioning.md）。
+
+- [x] LPを作る → `lp/index.html`。診断がその場で動く
+- [ ] **Formspree のフォームIDを差し替える**（`lp/README.md`。ここを忘れると登録が届かない）
+- [ ] **Netlify Drop で公開 → 子育て中の知人3〜5人に見せる**（ここが次の一手）
+- [ ] コミュニティに出す → Meta広告5,000円（判断ラインは positioning.md）
+- [ ] 反応あり → 初回体験の作り直し（入力3つで30秒以内に予測を出す）
 - [ ] ホーム画面にライフプラン概観カード (今年のフェーズ・今月の目標積立額)
 - [ ] AIアドバイスにライフプラン文脈を注入 (現在は月次データのみ参照)
 - [ ] PWA対応 — iOS化の第一歩
