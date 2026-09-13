@@ -1,0 +1,742 @@
+<title>家計のピーク年</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Old+Mincho:wght@400;600&display=swap">
+
+<style>
+  :root {
+    --paper:   #FAF9F8;
+    --surface: #FFFFFF;
+    --ink:     #16151A;
+    --body:    #3E3C44;
+    --muted:   #77737E;
+    --line:    #E4E0DE;
+    --line-2:  #CFC9C6;
+    --accent:  #A4272C;
+    --accent-soft: #F2E3E3;
+    --good:    #1F6F4A;
+
+    --display: "Zen Old Mincho", "Yu Mincho", "Hiragino Mincho ProN", serif;
+    --sans: "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Helvetica Neue", Arial, sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:   #111013;
+      --surface: #1A181C;
+      --ink:     #F0EDEA;
+      --body:    #C8C3C0;
+      --muted:   #8E8890;
+      --line:    #2B282E;
+      --line-2:  #45414A;
+      --accent:  #E0757A;
+      --accent-soft: #2E2023;
+      --good:    #62C295;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:   #111013;
+    --surface: #1A181C;
+    --ink:     #F0EDEA;
+    --body:    #C8C3C0;
+    --muted:   #8E8890;
+    --line:    #2B282E;
+    --line-2:  #45414A;
+    --accent:  #E0757A;
+    --accent-soft: #2E2023;
+    --good:    #62C295;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--body);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.85;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    padding-inline: 22px;
+  }
+
+  .band { padding-block: 64px; border-top: 1px solid var(--line); }
+  .band:first-of-type { border-top: 0; }
+
+  h1, h2, h3 { color: var(--ink); text-wrap: balance; margin: 0; }
+
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    margin: 0 0 22px;
+  }
+
+  h1 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: clamp(26px, 6.6vw, 46px);
+    line-height: 1.4;
+    letter-spacing: .01em;
+    word-break: keep-all;
+    line-break: strict;
+  }
+
+  h2 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: clamp(21px, 4.6vw, 27px);
+    line-height: 1.5;
+    margin-bottom: 20px;
+  }
+
+  h3 {
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.7;
+    margin-bottom: 6px;
+  }
+
+  p { margin: 0 0 16px; }
+  p:last-child { margin-bottom: 0; }
+
+  .lede {
+    font-size: 16px;
+    margin-top: 22px;
+    max-width: 34em;
+  }
+
+  .fine { font-size: 12.5px; color: var(--muted); line-height: 1.75; }
+
+  /* ---------- 診断フォーム ---------- */
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 24px 22px;
+    margin-top: 34px;
+  }
+
+  .field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .field:last-child { margin-bottom: 0; }
+
+  .field > label,
+  .field-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    color: var(--ink);
+  }
+
+  .inputs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .inputs > * { flex: 1 1 0; min-width: 84px; }
+
+  input[type="number"], input[type="email"], select, textarea {
+    font-family: var(--sans);
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    background: var(--paper);
+    border: 1px solid var(--line-2);
+    border-radius: 0;
+    padding: 9px 11px;
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  select {
+    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position: calc(100% - 16px) calc(50% + 1px), calc(100% - 11px) calc(50% + 1px);
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 30px;
+  }
+
+  input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .pair { display: flex; gap: 12px; flex-wrap: wrap; }
+  .pair > .field { flex: 1 1 150px; margin-bottom: 0; }
+
+  .hint { font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+  /* ---------- 結果 ---------- */
+
+  .verdict { margin-top: 38px; }
+
+  .verdict-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    color: var(--muted);
+  }
+
+  .peak-year {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: clamp(52px, 15vw, 82px);
+    line-height: 1.05;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
+    margin-top: 4px;
+  }
+  .peak-year span { font-size: .42em; letter-spacing: .02em; margin-left: .12em; }
+
+  table.breakdown {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 22px;
+    font-variant-numeric: tabular-nums;
+  }
+  table.breakdown th {
+    text-align: left;
+    font-size: 11px;
+    letter-spacing: .1em;
+    color: var(--muted);
+    font-weight: 500;
+    padding: 0 0 7px;
+    border-bottom: 1px solid var(--line);
+  }
+  table.breakdown td {
+    padding: 11px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 14px;
+  }
+  table.breakdown td:last-child, table.breakdown th:last-child { text-align: right; }
+  table.breakdown tr.total td {
+    font-weight: 700;
+    color: var(--ink);
+    border-bottom: 0;
+    border-top: 1px solid var(--line-2);
+  }
+  .grade { color: var(--ink); font-weight: 500; }
+
+  .chart { margin-top: 30px; }
+  .chart svg { width: 100%; height: auto; display: block; font-family: var(--sans); }
+  .chart text { fill: var(--muted); }
+  .chart text.t-accent { fill: var(--accent); font-weight: 700; }
+  .chart .b-bar { fill: var(--line-2); }
+  .chart .b-peak { fill: var(--accent); }
+  .chart .axis { stroke: var(--line-2); stroke-width: 1; }
+  .chart .guide { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 2 3; opacity: .5; }
+  .chart .line-asset { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; }
+  .chart .dot { fill: var(--accent); }
+
+  .outcome {
+    margin-top: 28px;
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 18px 20px;
+  }
+  .outcome.ok { border-left-color: var(--good); background: transparent; border: 1px solid var(--line); border-left: 3px solid var(--good); }
+  .outcome strong { color: var(--ink); }
+  .outcome .big {
+    font-size: 21px;
+    font-weight: 700;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.5;
+  }
+
+  /* ---------- 論拠ブロック ---------- */
+
+  .reasons { display: flex; flex-direction: column; gap: 26px; }
+  .reason-q {
+    font-family: var(--display);
+    font-size: 17px;
+    color: var(--ink);
+    line-height: 1.6;
+    margin-bottom: 6px;
+  }
+
+  .compare { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  .compare th {
+    text-align: left; font-size: 11px; letter-spacing: .1em; color: var(--muted);
+    font-weight: 500; padding: 0 0 7px; border-bottom: 1px solid var(--line);
+  }
+  .compare td { padding: 12px 14px 12px 0; border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: top; }
+  .compare td:last-child { padding-right: 0; }
+  .compare tr:last-child td { border-bottom: 0; }
+  .compare .who { color: var(--ink); font-weight: 500; white-space: nowrap; }
+
+  ol.steps { list-style: none; padding: 0; margin: 0; counter-reset: s; }
+  ol.steps li {
+    counter-increment: s;
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 14px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  ol.steps li:last-child { border-bottom: 0; }
+  ol.steps li::before {
+    content: counter(s);
+    font-family: var(--display);
+    font-size: 20px;
+    color: var(--accent);
+    line-height: 1.35;
+  }
+
+  /* ---------- 登録 ---------- */
+
+  .signup { background: var(--surface); border: 1px solid var(--line); padding: 28px 22px; margin-top: 26px; }
+
+  button.cta {
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--paper);
+    background: var(--ink);
+    border: 1px solid var(--ink);
+    padding: 13px 18px;
+    width: 100%;
+    cursor: pointer;
+  }
+  button.cta:hover { opacity: .86; }
+
+  footer { padding-block: 40px 72px; border-top: 1px solid var(--line); }
+  footer p { margin-bottom: 10px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<main>
+
+<section class="band wrap">
+  <p class="eyebrow">Life free — 教育費のピーク診断</p>
+
+  <h1>一番きついのは、<br>何年後か知っていますか。</h1>
+
+  <p class="lede">
+    教育費はいつも「総額1,000万円」と語られます。でも家計を壊すのは総額ではなく、
+    上の子の大学と下の子の高校が<strong>重なる年</strong>です。
+    生まれた年を入れるだけで、その年がわかります。
+  </p>
+
+  <div class="panel">
+    <div class="field">
+      <p class="field-label" id="lbl-birth">子どもの生まれた年</p>
+      <div class="inputs" role="group" aria-labelledby="lbl-birth">
+        <input type="number" id="b1" value="2021" min="1990" max="2045" step="1" placeholder="2021" aria-label="1人目の生まれた年">
+        <input type="number" id="b2" value="2024" min="1990" max="2045" step="1" placeholder="2人目" aria-label="2人目の生まれた年">
+        <input type="number" id="b3" value="" min="1990" max="2045" step="1" placeholder="3人目" aria-label="3人目の生まれた年">
+      </div>
+      <p class="hint">これから生まれる予定なら、その年を入れてください。</p>
+    </div>
+
+    <div class="pair">
+      <div class="field">
+        <label for="assets">今の貯蓄＋投資（万円）</label>
+        <input type="number" id="assets" value="300" min="0" step="10">
+      </div>
+      <div class="field">
+        <label for="monthly">毎月の積立（万円）</label>
+        <input type="number" id="monthly" value="3" min="0" step="1">
+      </div>
+    </div>
+
+    <div class="pair" style="margin-top:20px">
+      <div class="field">
+        <label for="uni">大学の想定</label>
+        <select id="uni">
+          <option value="private_l" selected>私立・文系</option>
+          <option value="private_s">私立・理系</option>
+          <option value="national">国公立</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="dorm">通学</label>
+        <select id="dorm">
+          <option value="0" selected>自宅から</option>
+          <option value="1">下宿・一人暮らし</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <p class="hint" style="margin-top:14px">▼ 例として2021年・2024年生まれで表示しています。数字を変えるとすぐ更新されます。</p>
+
+  <div class="verdict" id="verdict" aria-live="polite"></div>
+
+  <p class="fine" style="margin-top:22px">
+    高校までは公立、運用は年4%で計算しています。金額は文部科学省・日本政策金融公庫の
+    調査にもとづく<strong>概算</strong>です。0〜2歳の保育料は世帯で差が大きいため含めていません。
+  </p>
+</section>
+
+<section class="band wrap">
+  <h2>なぜ「総額」ではなく「年」なのか</h2>
+
+  <div class="reasons">
+    <div>
+      <p class="reason-q">総額は、行動を変えない。</p>
+      <p>18年後に1,000万円と言われても、今日できることは何もありません。
+      「2044年に年178万円」なら、あと何年あるかが数えられます。</p>
+    </div>
+    <div>
+      <p class="reason-q">山は、重なりでできる。</p>
+      <p>一人あたりの教育費を足しても、山は見えません。
+      上の子の大学1年と下の子の高校3年が同じ年に来る——そこが底です。
+      子どもが2人以上なら、必ずこの年があります。</p>
+    </div>
+    <div>
+      <p class="reason-q">小さいうちなら、まだ間に合う。</p>
+      <p>0歳なら大学まで18年、7歳でも11年。積立額をあと2万円変えるだけで底が変わります。
+      中高生の親には、もうこの余白がありません。</p>
+    </div>
+  </div>
+</section>
+
+<section class="band wrap">
+  <h2>すでにある答えが、なぜ足りないのか</h2>
+
+  <div style="overflow-x:auto">
+    <table class="compare">
+      <thead>
+        <tr><th>いま相談できる先</th><th>足りないところ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="who">無料のFP相談</td><td>ライフプラン表は作ってもらえる。ただし最後に保険をすすめられる。</td></tr>
+        <tr><td class="who">各社のシミュレーター</td><td>その場限り。保存されないので、翌年また一から入力する。</td></tr>
+        <tr><td class="who">公的な試算ツール</td><td>「年収が毎年2%上がる想定」など、自分と関係のない数字が前提。</td></tr>
+        <tr><td class="who">家計簿アプリ</td><td>使った日を記録するだけ。将来の話をしない。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p style="margin-top:22px">
+    Life free は何も売りません。そして、この診断の先では
+    <strong>あなたが実際に積み立てた金額</strong>から未来を引きます。想像の数字ではありません。
+  </p>
+</section>
+
+<section class="band wrap">
+  <h2>診断のあと、アプリがすること</h2>
+
+  <ol class="steps">
+    <li>
+      <div>
+        <h3>山を越える手を試す</h3>
+        <p>積立をいくら増やせば底が0を割らないか。進路を国公立に変えたらどう動くか。
+        昇進・復職・住宅購入を年ごとに置いて、そのつど底を見ます。</p>
+      </div>
+    </li>
+    <li>
+      <div>
+        <h3>月末に、残高を1回だけ記録する</h3>
+        <p>レシートも口座連携もありません。月末の残高だけ。
+        クレジットカードの請求とズレないので、通帳の数字とそのまま一致します。</p>
+      </div>
+    </li>
+    <li>
+      <div>
+        <h3>予測が、自分の実績に置き換わる</h3>
+        <p>2ヶ月分たまると「毎月の積立」が想定値から実績値に変わります。
+        ここから先の予測は、もう他人の平均ではありません。</p>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<section class="band wrap">
+  <h2>準備中です。<br>できたら、最初にお知らせします。</h2>
+
+  <p>0〜7歳のお子さんがいる方、これからお子さんを持つ方に向けて作っています。
+  いま何に困っているかを書いてもらえると、そこから作ります。</p>
+
+  <div class="signup">
+    <!--
+      TODO: Formspree のフォームIDに差し替える。
+      https://formspree.io/ で新規フォームを作り、発行された
+      https://formspree.io/f/xxxxxxxx を下の action に貼る。
+    -->
+    <form action="https://formspree.io/f/YOUR_FORM_ID" method="POST">
+      <div class="field">
+        <label for="email">メールアドレス</label>
+        <input type="email" id="email" name="email" required placeholder="you@example.com">
+      </div>
+      <div class="field">
+        <label for="worry">お金のことで、いま一番知りたいこと（任意）</label>
+        <textarea id="worry" name="worry" rows="3" placeholder="例：中学受験させるか迷っていて、その場合いくら必要なのか"></textarea>
+      </div>
+      <input type="hidden" name="diagnosis" id="diagnosis-context" value="">
+      <button class="cta" type="submit">お知らせを受け取る</button>
+    </form>
+    <p class="hint" style="margin-top:14px">
+      お知らせ以外には使いません。いつでも解除できます。
+    </p>
+  </div>
+</section>
+
+<footer class="wrap">
+  <p class="fine">
+    <strong>金額の出典</strong>：文部科学省「子供の学習費調査」（令和3年度）、
+    日本政策金融公庫「教育費負担の実態調査結果」。いずれも平均値をもとにした概算で、
+    地域・進路・世帯によって大きく変わります。この診断は将来の金額を保証するものではなく、
+    特定の金融商品をすすめるものでもありません。
+  </p>
+  <p class="fine">
+    3〜5歳は幼児教育・保育の無償化を前提に、給食費・行事費のみを見込んでいます。
+    高校は就学支援金を織り込んだ実質負担に近い金額です。
+    学年は4月1日時点の年齢から求めているため、早生まれの方は1学年ずれます。
+  </p>
+  <p class="fine" style="margin-top:18px">Life free</p>
+</footer>
+
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var COST = {
+    kinder: 100000,
+    elem:   353000,
+    junior: 539000,
+    high:   597000,
+    uni: {
+      national:  { first: 817000,  rest: 536000  },
+      private_l: { first: 1180000, rest: 950000  },
+      private_s: { first: 1560000, rest: 1320000 }
+    },
+    dorm: 1000000
+  };
+
+  var RATE = 0.04;
+
+  function gradeOf(age) {
+    if (age === 3) return '年少';
+    if (age === 4) return '年中';
+    if (age === 5) return '年長';
+    if (age >= 6  && age <= 11) return '小' + (age - 5);
+    if (age >= 12 && age <= 14) return '中' + (age - 11);
+    if (age >= 15 && age <= 17) return '高' + (age - 14);
+    if (age >= 18 && age <= 21) return '大' + (age - 17);
+    return null;
+  }
+
+  function costOf(age, uniKey, dorm) {
+    if (age >= 3 && age <= 5)   return COST.kinder;
+    if (age >= 6 && age <= 11)  return COST.elem;
+    if (age >= 12 && age <= 14) return COST.junior;
+    if (age >= 15 && age <= 17) return COST.high;
+    if (age >= 18 && age <= 21) {
+      var u = COST.uni[uniKey];
+      return (age === 18 ? u.first : u.rest) + (dorm ? COST.dorm : 0);
+    }
+    return 0;
+  }
+
+  function simulate(births, assets, monthly, uniKey, dorm) {
+    var now = new Date().getFullYear();
+    var end = now;
+    births.forEach(function (b) { if (b + 21 > end) end = b + 21; });
+
+    var rows = [];
+    var a = assets;
+
+    for (var y = now; y <= end; y++) {
+      var items = [], total = 0;
+      births.forEach(function (b) {
+        var age = y - b;
+        var g = gradeOf(age);
+        if (!g) return;
+        var c = costOf(age, uniKey, dorm);
+        if (c <= 0) return;
+        items.push({ birth: b, age: age, grade: g, amount: c });
+        total += c;
+      });
+      a -= total;
+      rows.push({ year: y, cost: total, items: items, asset: a });
+      a = a * (1 + RATE) + monthly * 12;
+    }
+    return rows;
+  }
+
+  function lowest(rows) {
+    return rows.reduce(function (m, r) { return r.asset < m.asset ? r : m; }, rows[0]);
+  }
+
+  function requiredMonthly(births, assets, uniKey, dorm) {
+    var lo = 0, hi = 2000000;
+    for (var i = 0; i < 44; i++) {
+      var mid = (lo + hi) / 2;
+      if (lowest(simulate(births, assets, mid, uniKey, dorm)).asset >= 0) hi = mid;
+      else lo = mid;
+    }
+    return hi;
+  }
+
+  function man(yen) {
+    var v = yen / 10000;
+    var s = Math.abs(v) < 10 ? (Math.round(v * 10) / 10) : Math.round(v);
+    return s.toLocaleString('ja-JP');
+  }
+
+  function chart(rows, peak, markIdx) {
+    var W = 720, H = 300;
+    var L = 8, R = 8;
+    var barTop = 26, barBase = 150;
+    var lineTop = 208, lineBase = 288;
+
+    var n = rows.length;
+    var step = (W - L - R) / n;
+    var bw = Math.max(3, step * 0.62);
+
+    var maxCost = Math.max.apply(null, rows.map(function (r) { return r.cost; })) || 1;
+    var assetVals = rows.map(function (r) { return r.asset; });
+    var maxA = Math.max.apply(null, assetVals.concat([0]));
+    var minA = Math.min.apply(null, assetVals.concat([0]));
+    var spanA = (maxA - minA) || 1;
+
+    var x = function (i) { return L + step * i + (step - bw) / 2; };
+    var cx = function (i) { return L + step * i + step / 2; };
+    var ay = function (v) { return lineBase - ((v - minA) / spanA) * (lineBase - lineTop); };
+
+    var p = [];
+    p.push('<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="年ごとの教育費と資産の見込み">');
+
+    p.push('<text x="' + L + '" y="12" font-size="11">年ごとの教育費</text>');
+    p.push('<text x="' + (W - R) + '" y="12" font-size="11" text-anchor="end">最大 年' + man(maxCost) + '万円</text>');
+
+    var pi = rows.indexOf(peak);
+    p.push('<line class="guide" x1="' + cx(pi).toFixed(1) + '" y1="' + barTop + '" x2="' + cx(pi).toFixed(1) + '" y2="' + lineBase + '"/>');
+
+    p.push('<line class="axis" x1="' + L + '" y1="' + barBase + '" x2="' + (W - R) + '" y2="' + barBase + '"/>');
+
+    rows.forEach(function (r, i) {
+      if (r.cost <= 0) return;
+      var h = (r.cost / maxCost) * (barBase - barTop);
+      p.push('<rect class="' + (r === peak ? 'b-peak' : 'b-bar') + '" x="' + x(i).toFixed(1) +
+             '" y="' + (barBase - h).toFixed(1) + '" width="' + bw.toFixed(1) +
+             '" height="' + h.toFixed(1) + '"/>');
+    });
+
+    p.push('<text x="' + L + '" y="' + (lineTop - 14) + '" font-size="11">資産の見込み</text>');
+
+    var zeroY = ay(0);
+    p.push('<line class="axis" x1="' + L + '" y1="' + zeroY.toFixed(1) + '" x2="' + (W - R) + '" y2="' + zeroY.toFixed(1) + '"/>');
+    p.push('<text x="' + (W - R) + '" y="' + (zeroY - 5).toFixed(1) + '" font-size="10" text-anchor="end">0円</text>');
+
+    var pts = rows.map(function (r, i) { return cx(i).toFixed(1) + ',' + ay(r.asset).toFixed(1); }).join(' ');
+    p.push('<polyline class="line-asset" points="' + pts + '"/>');
+
+    p.push('<circle class="dot" cx="' + cx(markIdx).toFixed(1) + '" cy="' + ay(rows[markIdx].asset).toFixed(1) + '" r="3.5"/>');
+
+    var first = rows[0], last = rows[n - 1];
+    p.push('<text x="' + L + '" y="' + (H - 4) + '" font-size="11">' + first.year + '</text>');
+    p.push('<text class="t-accent" x="' + cx(pi).toFixed(1) + '" y="' + (H - 4) + '" font-size="11" text-anchor="middle">' + peak.year + '</text>');
+    if (pi < n - 2) {
+      p.push('<text x="' + (W - R) + '" y="' + (H - 4) + '" font-size="11" text-anchor="end">' + last.year + '</text>');
+    }
+
+    p.push('</svg>');
+    return p.join('');
+  }
+
+  var el = {
+    verdict: document.getElementById('verdict'),
+    context: document.getElementById('diagnosis-context')
+  };
+
+  function readYear(id) {
+    var v = parseInt(document.getElementById(id).value, 10);
+    return (v >= 1990 && v <= 2045) ? v : null;
+  }
+
+  function run() {
+    var births = ['b1', 'b2', 'b3'].map(readYear).filter(function (v) { return v !== null; });
+    births.sort(function (a, b) { return a - b; });
+
+    if (!births.length) {
+      el.verdict.innerHTML = '<p class="hint">子どもの生まれた年を入れると、ここに一番きつい年が出ます。</p>';
+      el.context.value = '';
+      return;
+    }
+
+    var assets  = Math.max(0, (parseFloat(document.getElementById('assets').value)  || 0)) * 10000;
+    var monthly = Math.max(0, (parseFloat(document.getElementById('monthly').value) || 0)) * 10000;
+    var uniKey  = document.getElementById('uni').value;
+    var dorm    = document.getElementById('dorm').value === '1';
+
+    var rows = simulate(births, assets, monthly, uniKey, dorm);
+    var costly = rows.filter(function (r) { return r.cost > 0; });
+
+    if (!costly.length) {
+      el.verdict.innerHTML = '<p class="hint">その生まれ年だと、教育費のかかる期間が終わっています。</p>';
+      el.context.value = '';
+      return;
+    }
+
+    var peak = costly.reduce(function (m, r) { return r.cost > m.cost ? r : m; }, costly[0]);
+    var pi   = rows.indexOf(peak);
+
+    // 不足の判定は全期間で。「底」は山を越えたあとの谷を指す
+    // (初年度の残高がそのまま最小値になり「一番減るのは今年」と出るのを避ける)
+    var globalLow = lowest(rows);
+    var trough    = lowest(rows.slice(pi));
+    var report    = globalLow.asset < 0 ? globalLow : trough;
+
+    var html = '';
+    html += '<p class="verdict-label">一番きついのは</p>';
+    html += '<p class="peak-year">' + peak.year + '<span>年</span></p>';
+
+    html += '<table class="breakdown"><thead><tr>' +
+            '<th>生まれ年</th><th>年齢</th><th>学年</th><th>その年の教育費</th>' +
+            '</tr></thead><tbody>';
+    peak.items.forEach(function (it) {
+      html += '<tr><td>' + it.birth + '年</td><td>' + it.age + '歳</td>' +
+              '<td class="grade">' + it.grade + '</td><td>' + man(it.amount) + '万円</td></tr>';
+    });
+    html += '<tr class="total"><td colspan="3">合計</td><td>年 ' + man(peak.cost) + '万円</td></tr>';
+    html += '</tbody></table>';
+
+    html += '<div class="chart">' + chart(rows, peak, rows.indexOf(report)) + '</div>';
+
+    var summary;
+    if (globalLow.asset < 0) {
+      var need = requiredMonthly(births, assets, uniKey, dorm);
+      var add = Math.ceil((need - monthly) / 1000) * 1000;
+      summary = globalLow.year + '年に' + man(-globalLow.asset) + '万円不足 / 必要な積立 月' + man(need) + '万円';
+      html += '<div class="outcome">' +
+              '<p class="big">このままだと、' + globalLow.year + '年に<br>' + man(-globalLow.asset) + '万円 足りません。</p>' +
+              '<p style="margin-top:10px">毎月の積立を <strong>あと' + man(add) + '万円</strong>（月' + man(need) + '万円）にすれば、' +
+              '底でも0を割らずに済みます。いまから<strong>' + (globalLow.year - rows[0].year) + '年</strong>あります。</p>' +
+              '</div>';
+    } else {
+      summary = trough.year + '年の底で' + man(trough.asset) + '万円残る / 積立 月' + man(monthly) + '万円';
+      html += '<div class="outcome ok">' +
+              '<p class="big">今のペースなら、乗り切れます。</p>' +
+              '<p style="margin-top:10px">教育費を払い終えるまでで資産が一番少なくなるのは ' + trough.year + '年。' +
+              'それでも <strong>' + man(trough.asset) + '万円</strong> 残る見込みです。' +
+              '進路や住宅の予定が変わると、この底も動きます。</p>' +
+              '</div>';
+    }
+
+    el.verdict.innerHTML = html;
+    el.context.value = 'ピーク' + peak.year + '年（年' + man(peak.cost) + '万円） / ' + summary +
+                       ' / 生年' + births.join('・');
+  }
+
+  ['b1', 'b2', 'b3', 'assets', 'monthly', 'uni', 'dorm'].forEach(function (id) {
+    var node = document.getElementById(id);
+    node.addEventListener('input', run);
+    node.addEventListener('change', run);
+  });
+
+  run();
+})();
+</script>
