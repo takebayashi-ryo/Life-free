@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# モックのビルド成果物 (mock/*.dc.html から再生成できる)
+mock/konosaki-mock.html
