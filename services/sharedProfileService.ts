@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+import { apiFetch } from './apiClient';
 import { FinancialConfig, LifePlan, MonthlyRecord, UserProfile } from '../types';
 import { buildYearContext, calcYearAmounts } from './lifePlanService';
 
@@ -143,23 +143,13 @@ export async function saveSharedProfile(
       lifePlan,
       config
     );
-    const now = new Date().toISOString();
-
-    const { error } = await supabase.from('shared_profile').upsert(
-      [
-        { scope: 'public', data: publicProfile, updated_at: now },
-        { scope: 'financial', data: financialProfile, updated_at: now },
-      ],
-      { onConflict: 'scope' }
-    );
-
-    if (error) {
-      console.error('共有プロフィールの保存に失敗しました:', error.message);
-      return false;
-    }
+    await apiFetch('/api/shared-profile', {
+      method: 'PUT',
+      body: JSON.stringify({ public: publicProfile, financial: financialProfile }),
+    });
     return true;
   } catch (error) {
-    console.error('共有プロフィールの保存で例外が発生しました:', error);
+    console.error('共有プロフィールの保存に失敗しました:', error);
     return false;
   }
 }

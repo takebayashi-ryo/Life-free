@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "life-free",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    // 画面は SPA。/api/* 以外は静的ファイル（なければ index.html）を返す
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "life-free",
+      "database_id": "fd227b22-e4b1-45a9-9fea-26376c37ba79",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Cloudflare Access の設定値（Access アプリを作ったら入れる。docs/deploy.md）
+  "vars": {},
+  "observability": { "enabled": true }
+}

@@ -49,9 +49,10 @@
 - **React 19** + **TypeScript** + **Vite**
 - **Tailwind CSS** (CDN経由、`darkMode: 'class'`)
 - **Recharts** (グラフ)
-- **Supabase** (月次レコード永続化)
+- **Cloudflare Worker + D1** (API は Hono、`worker/index.ts`。DB は D1)
+- **Cloudflare Access** (入口の保護。Worker でもトークンを検証、`worker/auth.ts`)
 - **Google Gemini API** — アドバイス・質問応答・年別イベント提案
-- **Vercel** (ホスティング・自動デプロイ)
+- **Cloudflare Workers Builds** (main への push で自動公開。手順は `docs/deploy.md`)
 - **GitHub Actions** (CI: 型チェック + ビルド)
 
 ## ファイル構成
@@ -60,7 +61,8 @@
 App.tsx                     # メインコンポーネント・全タブのルーター兼状態管理
 types.ts                    # 型定義 (FinancialConfig, MonthlyRecord, UserProfile, LifePlan...)
 services/
-  dataService.ts            # Supabase records CRUD
+  apiClient.ts              # Worker API (/api/*) の呼び出し
+  dataService.ts            # 月次記録の読み書き
   simulationService.ts      # 複利計算 (SimulationPhase[] 対応)
   lifePlanService.ts        # LifePlan生成・年齢文脈の構築・SimulationPhaseへの変換
   settingsService.ts        # app_settings テーブルへの設定の読み書き
@@ -144,12 +146,12 @@ npm run build       # vite build — バンドル生成
 - 小〜中規模の変更: `mcp__github__create_or_update_file` / `push_files` で直接リモート書き換え
 - 状態同期のブレを防ぐ (以前ローカル/リモートが食い違ってトラブルあり)
 - push後は **必ず `actions_list` / `actions_get` でCI結果を確認する**
-- Vercel が push を検知して自動デプロイ
+- Cloudflare Workers Builds が main への push を検知して自動デプロイ
 
 ### ローカル経由 (大規模変更のみ)
 1. **ブランチ命名**: `claude/<feature-name>`
 2. **コミット前**: `npm run typecheck && npm run build` の両方を実行
-3. **プレビュー**: pushするとVercelが2〜3分でデプロイ
+3. **プレビュー**: 手元の `npm run dev` で確認する
 4. **mainへの反映**: `git merge --squash origin/<branch>` → commit → push
 
 ## 現在の状態
@@ -178,27 +180,27 @@ npm run build       # vite build — バンドル生成
 - ホーム画面の戦略カードに年齢チップ
 
 ### 未マージのブランチ
-なし (すべて反映済み)
+- `claude/cloudflare` — Supabase + Vercel から Cloudflare (Worker + D1 + Access) への移行。D1 へのデータ投入まで済み。公開の残作業は `docs/deploy.md`
 
 ## 環境変数
 - `VITE_GEMINI_API_KEY` または `GEMINI_API_KEY` — Gemini API key
   - `vite.config.ts` がビルド時に `process.env.API_KEY` へ注入する
-  - Vercelの環境変数で設定済み
-- Supabase接続情報 — `dataService.ts` で参照
+  - Workers Builds のビルド用環境変数に設定する
+- 開発時は `.dev.vars` の `DEV_USER_EMAIL` で Access なしに API を使える
 
 ## データの保存先
 
-### Supabase (端末をまたいで同期)
+### Cloudflare D1 (端末をまたいで同期)
 | テーブル | 内容 |
 |---|---|
 | `monthly_records` | 月次記録 |
 | `app_settings` | key-value形式。`profile` / `lifeplan` / `config` の3キー |
+| `shared_profile` | 他エージェント向けの要約 (`public` / `financial`) |
 
-`supabase/setup.sql` に両テーブルの定義とRLSポリシーをまとめてある。
-画面から手で変更したら、このファイルにも必ず反映すること (実態とズレると再構築できなくなる)。
+テーブル定義は `migrations/`。変更は新しいマイグレーションを足して本番 D1 に適用する。
 
-**現状のRLS**: 両テーブルともRLS有効。anonロールに全操作を許可 (単一ユーザー前提)。
-配布時は認証を入れて `USING (auth.uid() = user_id)` に書き換える必要がある。
+**アクセス制御**: 単一ユーザー前提。Cloudflare Access を通ったリクエストだけ API が応える。
+配布時は全テーブルに user_id を足し、Worker のクエリで絞る必要がある。
 
 ### localStorage
 | Key | 用途 | 同期 |
