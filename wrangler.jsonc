@@ -16,7 +16,10 @@
       "migrations_dir": "migrations"
     }
   ],
-  // Cloudflare Access の設定値（Access アプリを作ったら入れる。docs/deploy.md）
-  "vars": {},
+  "vars": {
+    // 2026-11-08 に作成した Cloudflare Access の認証設定
+    "ACCESS_TEAM_DOMAIN": "odd-snowflake-1e55.cloudflareaccess.com",
+    "ACCESS_AUD": "2b230ee326d921a08cc1531a7b813f40a89776ff025bbac381bd543fb2aee734"
+  },
   "observability": { "enabled": true }
 }
